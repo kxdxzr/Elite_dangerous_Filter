@@ -6,31 +6,17 @@
 
 An Elite Dangerous system and station filtering desktop tool powered by [Spansh](https://spansh.co.uk/), built with Python / tkinter and an instantly switchable Chinese / English UI.
 
-**Positioning: it may not be more convenient than Inara, but offers broader, more flexible, freely combinable filters.** It complements common lookups with more complex queries.
+**Seven built-in tools in one Windows EXE — no Python installation and no API key required:**
 
-Repository: [kxdxzr/Elite_dangerous_Filter](https://github.com/kxdxzr/Elite_dangerous_Filter). Developed by **GPT-6.1 Sol** through **vibe coding**, with ongoing user-driven iteration.
-
-All CSV exports start with five `# `-prefixed provenance rows: GitHub project author (`kxdxzr`), project name, version **0.1.3**, timezone-aware export time and project URL. A blank row follows, then the result header and data. Labels follow the UI language; English exports use English labels. Main-window CSV columns follow the completed search conditions instead of exporting raw JSON. CSV readers must skip the five provenance rows and blank separator. Metadata identifies the software, not ownership of upstream game data; existing CSV files are not modified.
-
-> **v0.1.3: engineer shopping lists, known discounts, paired specifications, sortable results and the neutron jump planner are included in the Windows EXE.** [Release notes](docs/releases/v0.1.3.md). Pirate finding remains in testing; stock, discounts, access and actual routes require in-game verification.
-
-## Download and run
-
-**Sortable results (v0.1.3):** click a header to toggle ascending/descending order. Numbers sort numerically, dates account for UTC offsets, names use natural ordering and unknowns remain last. Sorting survives localisation/streaming and preserves copy identity without changing model/route order. The waypoint editor is not sortable; route CSV retains actual route order.
-
-**Engineer shopping lists:** add/remove independently specified modules or ship weapons. A candidate station must stock **every** requested item, meeting each item's specification, discount and freshness requirements. Multiple names in one shopping row also mean ALL; main-window OR filters are unchanged. Lists/drafts survive sessions, and results/CSV show evidence per item. This does not verify quantities or plan purchases across multiple stations.
-
-**Paired specifications (v0.1.3):** one Specification selector offers confirmed combinations for all 153 bundled module/weapon names, e.g. Plasma Accelerator **2C / 3B / 4A**. Learning/caches retain the pairs rather than inventing a Cartesian product. Legacy conditions remain valid and unlisted specifications may still be entered manually.
-
-**[Engineer trip shopping](docs/engineer-shopping.md) (v0.1.3):** find one station stocking the entire specified list on the way to one of 25 ship-engineer systems. Each item has its own specification, discount and freshness. Custom range, automatic multi-jump estimates, arrival `ls`, maximum extra estimated jumps, carrier/planetary-station exclusions, saved drafts and per-item CSV evidence are supported. Defaults: 80 ly, at most one extra estimated jump, arrival below 1500 ls, discounts required, carriers ignored, planetary shopping stations allowed. Ranking covers fetched matches only; quantities and split-station baskets are not planned. **Estimated jumps are not verified routes.**
-
-**Main-window browsing and results (v0.1.3):** condition categories and module slot types shorten candidate lists without changing filter semantics or clearing names. Sessions preserve drafts and condition files retain slot choices. Results/CSV use separate condition-driven distances, module name/class/rating and discount/source columns, with horizontal scrolling instead of a packed information column.
-
-**Ship/module discounts:** **Any / True** only, for positive name comparisons. Eligibility follows [documented public station/Power rules](docs/station-discounts.md), not a standard-price download or a guess based on associated Power. The same item must match name, module specification and an applicable rule. Li Yong-Rui requires the controlling Power and Fortified/Stronghold state. Known location-specific and product-restricted rules are checked explicitly; unmatched/missing evidence is unknown, never a verified full price. Discount % is the percentage reduction (15 means 15% off), shown separately from its source in results and CSV. Personal rank/pledge rewards, expired CG discounts and unverified stacking are excluded. Verify stock, permits and final price in game.
+- **General filter:** freely combinable system/station conditions (AND between rows, OR within one multi-select row), distance intersections/outside ranges, module class/rating matching, shipyard/outfitting freshness and colonisation-candidate conditions — complex queries Spansh's own form cannot express.
+- **Neutron jump planner:** ship-specific fuel and refuelling planning from an imported Coriolis JSON / EDSY SLEF build, with ordered waypoints.
+- **Engineer trip shopping:** one station stocking a complete, independently specified shopping list on the way to one of 25 ship engineers.
+- **Rare goods target finder:** 142 sources across 138 systems, with optional experimental neutron-alignment ranking.
+- **Plus** pirate massacre candidates (testing), carrier parking and system midpoint finders.
 
 [**Download Windows EXE v0.1.3**](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/download/v0.1.3/EliteDangerousFilter.exe) · [v0.1.3 release notes](docs/releases/v0.1.3.md) · [All releases](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
-Run `EliteDangerousFilter.exe` on 64-bit Windows; no Python installation is needed. Searches require an internet connection, but no API key.
+Run `EliteDangerousFilter.exe` on 64-bit Windows; no Python installation is needed. Searches require an internet connection, but no API key. The EXE is not code-signed, so Windows SmartScreen may warn on the first launch: choose **More info → Run anyway**, or verify the file against the `SHA256SUMS.txt` asset published with the release (`certutil -hashfile EliteDangerousFilter.exe SHA256`).
 
 For source execution, use **Python 3.10+ with tkinter**; there are no third-party runtime dependencies:
 
@@ -43,6 +29,26 @@ python filter_gui.py
 Check Tk with `python -m tkinter`. Debian / Ubuntu may require `sudo apt install python3-tk` first.
 
 Select **中文 / English** on the main window to switch all tool windows immediately. System, faction, ship and module names remain unchanged; switching language preserves raw query conditions.
+
+Repository: [kxdxzr/Elite_dangerous_Filter](https://github.com/kxdxzr/Elite_dangerous_Filter). Developed by **GPT-6.1 Sol** through **vibe coding**, with ongoing user-driven iteration.
+
+> **Positioning:** it may not be more convenient than Inara for simple lookups, but it offers broader, more flexible, freely combinable filters for more complex queries, complementing common lookups rather than replacing them.
+
+> **v0.1.3: engineer shopping lists, known discounts, paired specifications, sortable results and the neutron jump planner are included in the Windows EXE.** [Release notes](docs/releases/v0.1.3.md). Pirate finding remains in testing; stock, discounts, access and actual routes require in-game verification.
+
+## What's new in v0.1.3
+
+**Sortable results (v0.1.3):** click a header to toggle ascending/descending order. Numbers sort numerically, dates account for UTC offsets, names use natural ordering and unknowns remain last. Sorting survives localisation/streaming and preserves copy identity without changing model/route order. The waypoint editor is not sortable; route CSV retains actual route order.
+
+**Engineer shopping lists:** add/remove independently specified modules or ship weapons. A candidate station must stock **every** requested item, meeting each item's specification, discount and freshness requirements. Multiple names in one shopping row also mean ALL; main-window OR filters are unchanged. Lists/drafts survive sessions, and results/CSV show evidence per item. This does not verify quantities or plan purchases across multiple stations.
+
+**Paired specifications (v0.1.3):** one Specification selector offers confirmed combinations for all 153 bundled module/weapon names, e.g. Plasma Accelerator **2C / 3B / 4A**. Learning/caches retain the pairs rather than inventing a Cartesian product. Legacy conditions remain valid and unlisted specifications may still be entered manually.
+
+**[Engineer trip shopping](docs/engineer-shopping.md) (v0.1.3):** find one station stocking the entire specified list on the way to one of 25 ship-engineer systems. Each item has its own specification, discount and freshness. Custom range, automatic multi-jump estimates, arrival `ls`, maximum extra estimated jumps, carrier/planetary-station exclusions, saved drafts and per-item CSV evidence are supported. Defaults: 80 ly, at most one extra estimated jump, arrival below 1500 ls, discounts required, carriers ignored, planetary shopping stations allowed. Ranking covers fetched matches only; quantities and split-station baskets are not planned. **Estimated jumps are not verified routes.**
+
+**Main-window browsing and results (v0.1.3):** condition categories and module slot types shorten candidate lists without changing filter semantics or clearing names. Sessions preserve drafts and condition files retain slot choices. Results/CSV use separate condition-driven distances, module name/class/rating and discount/source columns, with horizontal scrolling instead of a packed information column.
+
+**Ship/module discounts:** **Any / True** only, for positive name comparisons. Eligibility follows [documented public station/Power rules](docs/station-discounts.md), not a standard-price download or a guess based on associated Power. The same item must match name, module specification and an applicable rule. Li Yong-Rui requires the controlling Power and Fortified/Stronghold state. Known location-specific and product-restricted rules are checked explicitly; unmatched/missing evidence is unknown, never a verified full price. Discount % is the percentage reduction (15 means 15% off), shown separately from its source in results and CSV. Personal rank/pledge rewards, expired CG discounts and unverified stacking are excluded. Verify stock, permits and final price in game.
 
 ## Features
 
@@ -259,11 +265,19 @@ Screenshot refreshes are reproducible on Windows with optional developer depende
 
 The screenshots include the English-label correction (Search / Copy station name / Close), which the rebuilt v0.1.3 release executable also contains; the release's `SHA256SUMS.txt` matches the rebuilt asset.
 
+## CSV exports and provenance
+
+All CSV exports start with five `# `-prefixed provenance rows: GitHub project author (`kxdxzr`), project name, version **0.1.3**, timezone-aware export time and project URL. A blank row follows, then the result header and data. Labels follow the UI language; English exports use English labels. Main-window CSV columns follow the completed search conditions instead of exporting raw JSON. CSV readers must skip the five provenance rows and blank separator. Metadata identifies the software, not ownership of upstream game data; existing CSV files are not modified.
+
 ## Data sources
 
 - [Spansh](https://spansh.co.uk/): systems, stations, factions and full body data.
 - [EDSM](https://www.edsm.net/): reference-system coordinates.
 - [EDTools / CMDR VicTic](https://edtools.cc/pve.php): source/target pairs and explicit RES/CNB records, not a live mission API.
 - [Inara](https://inara.cz/elite/): reference for the rare-goods target template.
+
+## License
+
+This project is released under the [MIT License](LICENSE). The licence covers this project's own source code; upstream game data and third-party API content remain subject to their respective terms (see [Data sources](#data-sources)).
 
 Community project, not affiliated with Frontier Developments.
