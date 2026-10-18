@@ -129,9 +129,9 @@ def open_window(app):
     ttk.Label(win, text='前往工程师途中，寻找少绕路的模组／舰载武器售卖点，可筛选已知折扣。',
               wraplength=1280).pack(fill='x', padx=12)
     ttk.Label(win, text='自动覆盖单跳和多跳；额外跳数相对直达估算。未验证实际航线，排序仅针对已取回的命中。',
-              wraplength=1280, foreground='gray').pack(fill='x', padx=12)
+              wraplength=1280, style='Muted.TLabel').pack(fill='x', padx=12)
     ttk.Label(win, text='每项独立选择规格、折扣和新鲜度；到站距离留空不限，不核实购买数量。',
-              foreground='gray').pack(fill='x', padx=12)
+              style='Muted.TLabel').pack(fill='x', padx=12)
 
     actions = ttk.Frame(win, padding=8)
     actions.pack(fill='x')

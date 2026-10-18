@@ -105,9 +105,13 @@ class Treeview(base.Treeview):
         self._sortable = kw.pop('sortable', True)
         self._sort_column, self._sort_descending, self._sort_after = None, False, None
         self._sort_commands, self._custom_headings = {}, set()
+        self._stripe_after = None
         super().__init__(master, **kw)
         self._manager = manager(self)
         self._headings, self._items = {}, {}
+        appearance = getattr(self._root(), '_appearance', None)
+        if appearance:
+            appearance.style_widget(str(self))
         self.bind('<Destroy>', self._cleanup_sort, add='+')
         if self._manager:
             self._manager.register(self._render)
@@ -167,9 +171,31 @@ class Treeview(base.Treeview):
             self._sort_after = self.after_idle(self._apply_sort)
 
     def _cleanup_sort(self, event):
-        if event.widget is self and self._sort_after is not None:
-            self.after_cancel(self._sort_after)
-            self._sort_after = None
+        if event.widget is self:
+            for name in ('_sort_after', '_stripe_after'):
+                pending = getattr(self, name)
+                if pending is not None:
+                    self.after_cancel(pending)
+                    setattr(self, name, None)
+
+    def _queue_stripes(self):
+        if getattr(self._root(), '_appearance', None) and self._stripe_after is None:
+            self._stripe_after = self.after_idle(self._stripe_rows)
+
+    def _stripe_rows(self):
+        self._stripe_after = None
+        parents = ['']
+        while parents:
+            children = self.get_children(parents.pop())
+            for index, item in enumerate(children):
+                tags = tuple(tag for tag in self.item(item, 'tags')
+                             if tag not in ('_stripe_even', '_stripe_odd'))
+                super().item(item, tags=tags + (('_stripe_odd' if index % 2 else '_stripe_even'),))
+            parents.extend(children)
+
+    def move(self, item, parent, index):
+        super().move(item, parent, index)
+        self._queue_stripes()
 
     def set_columns(self, columns):
         """Replace a dynamic schema without retaining obsolete localized headers."""
@@ -189,6 +215,7 @@ class Treeview(base.Treeview):
         item = super().insert(parent, index, iid, **kw)
         self._items[item] = tuple(raw)
         self._queue_sort()
+        self._queue_stripes()
         return item
 
     def _display_values(self, values):
@@ -203,6 +230,7 @@ class Treeview(base.Treeview):
         for item in items:
             self._items.pop(item, None)
         super().delete(*items)
+        self._queue_stripes()
 
     def _render(self):
         for key, text in self._headings.items():

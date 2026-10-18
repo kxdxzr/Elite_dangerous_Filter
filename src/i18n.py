@@ -2,6 +2,8 @@
 import re
 
 CATALOG = {
+    '外观': 'Appearance', '跟随系统': 'Follow system', '浅色': 'Light', '深色': 'Dark',
+    '星系、空间站与顺路工具': 'Systems, stations and tools for your journey',
     '查询': 'Search', '复制站名': 'Copy station name', '关闭': 'Close',
     '是否打折': 'Discounted',
     '规格': 'Specification',

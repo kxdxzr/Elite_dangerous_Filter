@@ -27,6 +27,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=PROJECT / 'docs' / 'images')
     parser.add_argument('--work-dir', type=Path)
+    parser.add_argument('--appearance', choices=('light', 'dark', 'system'), default='light',
+                        help='Use a deterministic light theme by default; dark previews are optional.')
     args = parser.parse_args()
     if sys.platform != 'win32':
         parser.error('Window screenshots require Windows.')
@@ -62,6 +64,7 @@ def main():
         root.report_callback_exception = lambda *a: errors.append(str(a[1]))
         app = gui.App(root)
         app._closing = True
+        app.set_appearance(args.appearance)
 
         def pump(seconds=.25):
             deadline = time.monotonic() + seconds

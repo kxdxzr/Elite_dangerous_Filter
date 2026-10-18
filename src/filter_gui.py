@@ -3,7 +3,7 @@
 关闭时自动记住条件, 下次打开恢复。
 """
 import csv
-from export_metadata import write_csv_provenance
+from export_metadata import PROJECT_VERSION, write_csv_provenance
 import json
 import os
 import queue
@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from tkinter import filedialog
 from localized_tk import messagebox, ttk, Toplevel
 from i18n import Localizer
+from appearance import Appearance, MODES
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -400,8 +401,8 @@ class Row:
         self.kind = kind
         self._options = []      # 全量候选
         self._seq = 0           # 异步刷新序号, 防旧结果覆盖新字段
-        self.frame = ttk.Frame(master, padding=2, relief="groove")
-        self.frame.pack(fill="x", pady=2)
+        self.frame = ttk.Frame(master, padding=(8, 6), style='Condition.TFrame')
+        self.frame.pack(fill="x", pady=4)
         if rowtype == "distance":
             ttk.Label(self.frame, text="到星系距离", width=10).pack(side="left")
             self.ref = tk.StringVar(value="Sol")
@@ -422,7 +423,7 @@ class Row:
                          values=["范围内", "范围外"], state="readonly").pack(side="left", padx=4)
             self.ref_info = tk.StringVar(value="")
             self.lbl_ref = ttk.Label(self.frame, textvariable=self.ref_info,
-                                     foreground="gray")
+                                     style='Muted.TLabel')
             self.lbl_ref.pack(side="left", padx=4)
             self.cb_ref.bind("<FocusOut>", lambda e: (SuggestPopup.inst().hide(self.cb_ref),
                                                           self.validate_ref()))
@@ -485,7 +486,7 @@ class Row:
                                            values=['不限', '是'], state='readonly')
             self.opt_info = tk.StringVar(value="")
             self.lbl_opt = ttk.Label(bar, textvariable=self.opt_info, width=10,
-                                     foreground="gray")
+                                     style='Muted.TLabel')
             self.lbl_opt.pack(side="left")
             self._opt_base = ""
             self.set_fields(kind)
@@ -994,8 +995,10 @@ class App:
         self._post = ui_dispatcher(root)
         self.root = root
         self.localizer = Localizer(root)
-        self.localizer.register(lambda: root.title(self.localizer.tr("Elite 星系/空间站全条件筛选器")))
-        root.geometry("1320x780")
+        self.appearance_manager = Appearance(root)
+        self.localizer.register(lambda: root.title(
+            f'{self.localizer.tr("Elite 星系/空间站全条件筛选器")} — v{PROJECT_VERSION}'))
+        root.geometry("1320x840")
         self.rows = []
         self.results = []
         self._tool_states = {}
@@ -1003,7 +1006,29 @@ class App:
         self._last_session_state = None
         self._closing = False
 
-        top = ttk.Frame(root, padding=(6, 6, 6, 2))
+        header = ttk.Frame(root, padding=(12, 12, 12, 10))
+        header.pack(fill='x')
+        brand = ttk.Frame(header)
+        brand.pack(side='left')
+        ttk.Label(brand, text='Elite Dangerous Filter', style='Title.TLabel').pack(anchor='w')
+        ttk.Label(brand, text='星系、空间站与顺路工具', style='Muted.TLabel').pack(anchor='w')
+        preferences = ttk.Frame(header)
+        preferences.pack(side='right')
+        ttk.Label(preferences, text='外观').pack(side='left', padx=(0, 6))
+        self.appearance = tk.StringVar(value=MODES['system'])
+        self.appearance_box = ttk.Combobox(preferences, textvariable=self.appearance,
+                                          values=list(MODES.values()), state='readonly', width=12)
+        self.appearance_box.pack(side='left', padx=(0, 12))
+        self.appearance_box.bind('<<ComboboxSelected>>', self._appearance_selected)
+        ttk.Label(preferences, text='语言 / Language').pack(side='left', padx=(0, 6))
+        self.language = tk.StringVar(value='中文')
+        language_box = ttk.Combobox(preferences, textvariable=self.language,
+                                    values=['中文', 'English'], state='readonly', width=10)
+        language_box.pack(side='left')
+        language_box.bind('<<ComboboxSelected>>', lambda e: self.set_language(
+            'en' if self.language.get() == 'English' else 'zh'))
+
+        top = ttk.Frame(root, padding=(12, 6, 12, 4))
         top.pack(fill="x")
         ttk.Label(top, text="类型").pack(side="left")
         self.kind = tk.StringVar(value="stations")
@@ -1024,7 +1049,7 @@ class App:
         ttk.Button(top, text="清空条件", command=self.clear).pack(side="left", padx=4)
         ttk.Button(top, text="保存条件", command=self.save).pack(side="left")
         ttk.Button(top, text="读取条件", command=self.load).pack(side="left", padx=4)
-        self.btn_run = ttk.Button(top, text="运行搜索", command=self.run)
+        self.btn_run = ttk.Button(top, text="运行搜索", command=self.run, style='Accent.TButton')
         self.btn_run.pack(side="left")
         self.btn_stop = ttk.Button(top, text="停止", command=self.stop_search,
                                    state="disabled")
@@ -1036,23 +1061,16 @@ class App:
         details_bar.pack(fill='x')
         ttk.Button(details_bar, text='+ 天体／最近有人条件', command=self.add_system_details).pack(side='left', padx=4)
         ttk.Label(details_bar, text='星系模式：数量用普通条件；天体组和最近有人距离用详细条件。',
-                  foreground='gray').pack(side='left', padx=4)
+                  style='Muted.TLabel').pack(side='left', padx=4)
 
         extra = ttk.Frame(root, padding=(6, 0, 6, 6))
         extra.pack(fill="x")
-        ttk.Label(extra, text="额外功能：", foreground="gray").pack(side="left")
+        ttk.Label(extra, text="额外功能：", style='Muted.TLabel').pack(side="left")
         ttk.Button(extra, text="两系中点", command=self.midpoint_window).pack(side="left")
         ttk.Button(extra, text="航母车位", command=self.carrier_parking_window).pack(side="left", padx=4)
         ttk.Button(extra, text="稀有商品目标查找器", command=self.rare_goods_window).pack(side="left", padx=4)
         ttk.Button(extra, text="海盗任务查找器", command=self.pve_window).pack(side="left", padx=4)
         ttk.Button(extra, text="殖民候选星系查找器", command=self.colonisation_window).pack(side="left", padx=4)
-        self.language = tk.StringVar(value="中文")
-        language_box = ttk.Combobox(extra, textvariable=self.language,
-                                   values=["中文", "English"], state="readonly", width=10)
-        language_box.pack(side="right", padx=4)
-        ttk.Label(extra, text="语言 / Language").pack(side="right")
-        language_box.bind("<<ComboboxSelected>>", lambda e: self.set_language(
-            "en" if self.language.get() == "English" else "zh"))
         route_bar = ttk.Frame(root, padding=(6, 0, 6, 4))
         route_bar.pack(fill='x')
         ttk.Button(route_bar, text='中子星跳跃规划器', command=self.route_window).pack(side='left', padx=4)
@@ -1060,7 +1078,7 @@ class App:
 
         self.hint_var = tk.StringVar(
             value="第三格可下拉/打字联想/点“选值…”多选 (选项≤30个直接下拉)。船/模块名打字联想+自动纠错，行内自带新鲜度选择。")
-        ttk.Label(root, textvariable=self.hint_var, foreground="gray").pack(fill="x", padx=6)
+        ttk.Label(root, textvariable=self.hint_var, style='Muted.TLabel').pack(fill="x", padx=6)
 
         body = ttk.Frame(root)
         body.pack(fill="both", expand=True, padx=6)
@@ -1099,7 +1117,7 @@ class App:
         result_frame.columnconfigure(0, weight=1)
         self.localizer.register(self.render_main_results)
         copy_bar = ttk.Frame(root, padding=(6, 0, 6, 4))
-        copy_bar.pack(fill='x')
+        copy_bar.pack(side='bottom', fill='x', before=body)
         ttk.Button(copy_bar, text='复制名称', command=lambda: copy_result(root, self.tree, 'name')).pack(side='left')
         ttk.Button(copy_bar, text='复制星系名', command=self.copy_result_system).pack(side='left', padx=6)
 
@@ -1221,6 +1239,8 @@ class App:
     def _apply_state(self, d):
         if hasattr(self, "localizer"):
             self.set_language(d.get("language", self.localizer.language))
+        if hasattr(self, 'appearance_manager') and 'appearance' in d:
+            self.set_appearance(d['appearance'])
         self.clear()
         if d.get("kind") in ("stations", "systems"):
             self.kind.set(d["kind"])
@@ -1282,7 +1302,17 @@ class App:
                 "want": self.want.get(), "maxpages": self.maxpages.get(),
                 "rows": [r.editor_state() for r in self.rows if r.frame.winfo_exists()],
                 "tools": dict(self._tool_states),
-                "language": self.localizer.language if hasattr(self, "localizer") else "zh"}
+                "language": self.localizer.language if hasattr(self, "localizer") else "zh",
+                "appearance": self.appearance_manager.mode if hasattr(self, 'appearance_manager') else 'system'}
+
+    def set_appearance(self, mode):
+        self.appearance_manager.set_mode(mode)
+        self.appearance.set(MODES[self.appearance_manager.mode])
+
+    def _appearance_selected(self, event=None):
+        mode = next((key for key, label in MODES.items() if label == self.appearance.get()), 'system')
+        self.set_appearance(mode)
+        self.save_session()
 
     def set_language(self, language):
         if language not in ("zh", "en"):
@@ -1606,7 +1636,7 @@ class App:
         ttk.Label(options, text="留空不限，包含边界").pack(side="left")
         ttk.Checkbutton(options, text="只显示确认免许可的星系", variable=no_permit).pack(side="left", padx=8)
         ttk.Label(win, text="按站点类型统计 Spansh 已收录航母，不是实时数量或车位预测。类型数据不完整显示未知；数量筛选不包含未知结果。",
-                  wraplength=1020, foreground="gray").pack(fill="x", padx=8, pady=6)
+                  wraplength=1020, style='Muted.TLabel').pack(fill="x", padx=8, pady=6)
         status = tk.StringVar(value="输入参考星系后查询；双击结果复制星系名。")
         ttk.Label(win, textvariable=status, wraplength=1020).pack(fill="x", padx=8)
         progressbar = ttk.Progressbar(win, mode='determinate')
@@ -1635,7 +1665,7 @@ class App:
 
         tree.bind("<Double-1>", copy_name)
         copy_bar = ttk.Frame(win, padding=(8, 0, 8, 6))
-        copy_bar.pack(fill='x')
+        copy_bar.pack(side='bottom', fill='x', before=results_frame)
         ttk.Button(copy_bar, text='复制星系名', command=copy_name).pack(side='left')
 
         def export_rows():
@@ -1742,7 +1772,7 @@ class App:
         btn = ttk.Button(frm, text="查找")
         btn.grid(row=1, column=4, padx=8)
         status = tk.StringVar(value="输入两星系名后点查找 (支持联想, 打错自动纠)。")
-        ttk.Label(win, textvariable=status, foreground="gray").pack(fill="x", padx=8)
+        ttk.Label(win, textvariable=status, style='Muted.TLabel').pack(fill="x", padx=8)
         progressbar = ttk.Progressbar(win, mode='determinate')
         progressbar.pack(fill='x', padx=8)
         progress_text = tk.StringVar(win)
@@ -1757,7 +1787,7 @@ class App:
             tree.column(c, width=w)
         tree.pack(fill="both", expand=True, padx=8, pady=4)
         copy_bar = ttk.Frame(win, padding=(8, 0, 8, 6))
-        copy_bar.pack(fill='x')
+        copy_bar.pack(side='bottom', fill='x', before=tree)
         ttk.Button(copy_bar, text='复制星系名', command=lambda: copy_result(win, tree, 'name')).pack(side='left')
         tree.bind('<Double-1>', lambda event: copy_result(win, tree, 'name'))
 

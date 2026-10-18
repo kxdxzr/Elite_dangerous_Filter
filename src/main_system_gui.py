@@ -95,11 +95,11 @@ class DetailsRow:
             ttk.Entry(nearest, textvariable=self.variables[key], width=24).grid(row=1, column=index, sticky='ew', padx=4)
             nearest.columnconfigure(index, weight=1)
         ttk.Label(win, text='距离上下限都留空则不启用；先查最近达标星系，再判断含边界的范围。普通距离行可同时限定搜索区域。',
-                  wraplength=1200, foreground='gray').pack(fill='x', padx=8, pady=4)
+                  wraplength=1200, style='Muted.TLabel').pack(fill='x', padx=8, pady=4)
         ttk.Label(win, text='站点、航母和派系数量通过主界面的普通条件字段设置；任务派系数量为非无政府派系估计。',
-                  wraplength=1200, foreground='gray').pack(fill='x', padx=8)
+                  wraplength=1200, style='Muted.TLabel').pack(fill='x', padx=8)
         ttk.Label(win, text='in 多选及 between 范围用 | 分隔；布尔值用 true / false。互绕按共同直接质心和相同周期推定，复杂／缺失关系为未知。',
-                  wraplength=1200, foreground='gray').pack(fill='x', padx=8)
+                  wraplength=1200, style='Muted.TLabel').pack(fill='x', padx=8)
         editors = {}
 
         def changed():

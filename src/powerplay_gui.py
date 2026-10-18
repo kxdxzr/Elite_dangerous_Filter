@@ -36,7 +36,7 @@ def open_window(app, data_age):
     entry_filter = ttk.Entry(source_filter, textvariable=query, width=32)
     entry_filter.pack(side="left", padx=4)
     source_count = tk.StringVar()
-    ttk.Label(source_filter, textvariable=source_count, foreground="gray").pack(side="left", padx=6)
+    ttk.Label(source_filter, textvariable=source_count, style='Muted.TLabel').pack(side="left", padx=6)
     source_info = tk.StringVar()
     ttk.Label(win, textvariable=source_info, wraplength=1160).pack(fill="x", padx=8, pady=4)
 
@@ -70,13 +70,13 @@ def open_window(app, data_age):
         neutron_controls.pack(fill='x')
         ttk.Checkbutton(neutron_controls, text='仅显示顺路中子星辅助目标（实验性功能）', variable=neutron_only).pack(side='left')
         ttk.Label(neutron_controls, text='去程40 ly／返程50 ly；来源200 ly内中子星；到达距离≤100 Ls',
-                  foreground='gray').pack(side='left', padx=8)
+                  style='Muted.TLabel').pack(side='left', padx=8)
         ttk.Label(win, text='顺路条件逐势力放宽：30°／10% → 45°／25% → 60°／50%，有结果即停；40／50 ly仅作内部参考，不用于排除候选，不保证实际省跳。',
-                  foreground='gray', wraplength=1160).pack(fill='x', padx=8)
+                  style='Muted.TLabel', wraplength=1160).pack(fill='x', padx=8)
     ttk.Label(win, text="固定条件：大型停机坪、非地面站、排除航母和殖民船、Unoccupied。每个势力先查 ≤100 Ls，确认无结果后查 ≤1000 Ls。",
               wraplength=1160).pack(fill="x", padx=8, pady=(8, 0))
     ttk.Label(win, text=tool.STATE_NOTE + " 使用 Power，不要求由该势力控制。",
-              foreground="gray", wraplength=1160).pack(fill="x", padx=8, pady=4)
+              style='Muted.TLabel', wraplength=1160).pack(fill="x", padx=8, pady=4)
     status = tk.StringVar(value="每个势力最多显示5个星系，同星系只算一个结果；空间站仅供参考，保留最近的合格站点。双击明细复制星系名。")
     ttk.Label(win, textvariable=status, wraplength=1160).pack(fill="x", padx=8)
     progressbar = ttk.Progressbar(win, mode="indeterminate")
@@ -252,7 +252,7 @@ def open_window(app, data_age):
     button.pack(side="left", padx=6)
     ttk.Button(options, text="停止", command=stop.set).pack(side="left")
     footer = ttk.Frame(win, padding=8)
-    footer.pack(fill="x")
+    footer.pack(side='bottom', fill='x', before=summary)
     ttk.Button(footer, text="全部组明细", command=show_details).pack(side="left")
     ttk.Button(footer, text="复制星系名", command=copy_system).pack(side="left", padx=6)
     ttk.Button(footer, text='复制空间站名', command=lambda: copy_result(win, tree, 'station')).pack(side='left', padx=6)

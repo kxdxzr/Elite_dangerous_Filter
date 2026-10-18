@@ -24,6 +24,9 @@ def run(gui, report_path):
         root.report_callback_exception = lambda *args: callback_errors.append(str(args[1]))
         app = gui.App(root)
         app._closing = True  # 禁用自动保存，避免加载验证覆盖正常会话。
+        for mode in ('dark', 'light', 'system'):
+            app.set_appearance(mode)
+            assert app.appearance_manager.mode == mode
         app.set_language("zh")
         root.withdraw()
         app.clear()
@@ -43,6 +46,11 @@ def run(gui, report_path):
         colony = app.colonisation_window()
         route = app.route_window()
         shopping = app.engineer_shopping_window()
+        app.set_appearance('dark')
+        root.update_idletasks()
+        assert shopping.cget('background') == app.appearance_manager.palette['bg']
+        assert app.canvas.cget('background') == app.appearance_manager.palette['bg']
+        app.set_appearance('light')
 
         def button(parent, raw):
             stack, found = [parent], None
@@ -114,7 +122,13 @@ def run(gui, report_path):
         assert len(rare_goods.SOURCE_SYSTEMS) == 138
         assert len(fo.BUNDLED_OPTIONS["stations/modules"]) == 153
         from export_metadata import PROJECT_VERSION
+        assert PROJECT_VERSION in root.title()
+        if getattr(sys, 'frozen', False):
+            from pathlib import Path
+            licence = Path(sys._MEIPASS) / 'LICENSE'
+            assert 'GNU GENERAL PUBLIC LICENSE' in licence.read_text(encoding='utf-8')
         report.update(ok=True, version=PROJECT_VERSION, shopping_items=len(shopping.purchase_rows),
+                      appearance_modes=['system', 'light', 'dark'],
                       sortable_results=True, paired_specs=len(fo.BUNDLED_MODULE_PAIRS),
                       data_directory=data_directory(), session_file=gui.SESSION_FILE,
                       cache_file=fo.CACHE_FILE, specs_file=fo.SPECS_FILE,

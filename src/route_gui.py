@@ -32,7 +32,34 @@ def open_window(app):
     preview = {'generation': 0, 'identity': None, 'params': None, 'error': '', 'fsds': None}
     preview_lock, preview_closed = threading.Lock(), threading.Event()
 
-    ships = ttk.LabelFrame(win, text='舰船配置收藏', padding=6)
+    # Keep results accessible at smaller sizes / higher DPI without shrinking text.
+    panes = ttk.Panedwindow(win, orient='vertical')
+    panes.pack(fill='both', expand=True)
+    form_area = ttk.Frame(panes)
+    panes.add(form_area, weight=1)
+    canvas = tk.Canvas(form_area, height=430, highlightthickness=0)
+    scrollbar = ttk.Scrollbar(form_area, orient='vertical', command=canvas.yview)
+    canvas.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side='right', fill='y')
+    canvas.pack(side='left', fill='both', expand=True)
+    form = ttk.Frame(canvas)
+    form_id = canvas.create_window((0, 0), window=form, anchor='nw')
+    form.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+    canvas.bind('<Configure>', lambda e: canvas.itemconfigure(form_id, width=e.width))
+
+    def scroll_form(event):
+        if isinstance(event.widget, (ttk.Combobox, ttk.Treeview)) or not event.delta:
+            return
+        if (form_area.winfo_rootx() <= event.x_root < form_area.winfo_rootx() + form_area.winfo_width()
+                and form_area.winfo_rooty() <= event.y_root < form_area.winfo_rooty() + form_area.winfo_height()):
+            canvas.yview_scroll(-1 if event.delta > 0 else 1, 'units')
+            return 'break'
+    win.bind('<MouseWheel>', scroll_form, add='+')
+    result_area = ttk.Frame(panes)
+    panes.add(result_area, weight=1)
+    win.settings_canvas = canvas
+
+    ships = ttk.LabelFrame(form, text='舰船配置收藏', padding=6)
     ships.pack(fill='x', padx=8, pady=6)
     chooser = ttk.Combobox(ships, textvariable=selected, state='readonly', width=35)
     chooser.pack(side='left', padx=4)
@@ -127,16 +154,16 @@ def open_window(app):
     for label, command in (('新增舰船配置', editor), ('编辑舰船配置', lambda: editor(selected.get()) if selected.get() else editor()),
                            ('重命名', rename), ('删除收藏', delete)):
         ttk.Button(ships, text=label, command=command).pack(side='left', padx=4)
-    ttk.Label(win, text='收藏仅保存在本地；开始规划后，舰船配置和航点将发送至 Spansh。首次解析需要联网获取 FSD 数据。',
-              wraplength=1360, foreground='gray').pack(fill='x', padx=8)
+    ttk.Label(form, text='收藏仅保存在本地；开始规划后，舰船配置和航点将发送至 Spansh。首次解析需要联网获取 FSD 数据。',
+              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
 
-    summary = ttk.LabelFrame(win, text='所选舰船与跳跃属性', padding=6)
+    summary = ttk.LabelFrame(form, text='所选舰船与跳跃属性', padding=6)
     summary.pack(fill='x', padx=8, pady=4)
     identity_text, range_text = (tk.StringVar(win) for _ in range(2))
     for variable in (identity_text, range_text):
         ttk.Label(summary, textvariable=variable, wraplength=1350).pack(fill='x')
     ttk.Label(summary, text='理论单跳：主油箱与备用油箱满油，使用当前货物质量，不含注入；不代表当前位置可中子增压，实际路线受储备燃油等设置限制。',
-              foreground='gray', wraplength=1350).pack(fill='x')
+              style='Muted.TLabel', wraplength=1350).pack(fill='x')
 
     def render_preview():
         identity = preview['identity']
@@ -192,7 +219,7 @@ def open_window(app):
     cargo_trace = cargo.trace_add('write', lambda *_: render_preview())
     app.localizer.register(render_preview)
 
-    endpoints = ttk.Frame(win, padding=8)
+    endpoints = ttk.Frame(form, padding=8)
     endpoints.pack(fill='x')
     from filter_gui import attach_system_suggest
     for label, variable in (('起点星系', source), ('终点星系', destination)):
@@ -201,7 +228,7 @@ def open_window(app):
         box.pack(side='left', padx=6)
         attach_system_suggest(box, variable)
 
-    points_frame = ttk.LabelFrame(win, text='有序途经点', padding=6)
+    points_frame = ttk.LabelFrame(form, text='有序途经点', padding=6)
     points_frame.pack(fill='x', padx=8)
     box = ttk.Combobox(points_frame, textvariable=waypoint, width=35)
     box.grid(row=0, column=0, sticky='w')
@@ -245,7 +272,7 @@ def open_window(app):
                                          ('下移', lambda: edit_point(1)), ('删除途经点', edit_point)), 1):
         ttk.Button(points_frame, text=label, command=action).grid(row=0, column=col, padx=3)
 
-    settings = ttk.Frame(win, padding=8)
+    settings = ttk.Frame(form, padding=8)
     settings.pack(fill='x')
     for label, variable in (('货物 t', cargo), ('储备燃油 t', reserve)):
         ttk.Label(settings, text=label).pack(side='left')
@@ -254,23 +281,23 @@ def open_window(app):
     ttk.Combobox(settings, textvariable=injection, values=list(injections), state='readonly', width=10).pack(side='left', padx=5)
     ttk.Label(settings, text='规划算法').pack(side='left')
     ttk.Combobox(settings, textvariable=algorithm, values=list(algorithms), state='readonly', width=14).pack(side='left', padx=5)
-    flags_frame = ttk.Frame(win, padding=(8, 0))
+    flags_frame = ttk.Frame(form, padding=(8, 0))
     flags_frame.pack(fill='x')
     for key, label in (('supercharge', '使用中子增压'), ('already_supercharged', '第一段已增压'),
                        ('exclude_secondary', '排除副星'), ('refuel_every_scoopable', '遇可补油恒星即补油')):
         ttk.Checkbutton(flags_frame, text=label, variable=flags[key]).pack(side='left', padx=4)
-    ttk.Label(win, text=tool.FULL_TANK_NOTE, foreground='#a05a00', wraplength=1360).pack(fill='x', padx=8, pady=4)
+    ttk.Label(result_area, text=tool.FULL_TANK_NOTE, style='Warning.TLabel', wraplength=1360).pack(fill='x', padx=8, pady=4)
 
     status = tk.StringVar(win, value='选择收藏舰船，填写起终点；途经点按列表顺序规划。')
-    ttk.Label(win, textvariable=status, wraplength=1360).pack(fill='x', padx=8)
-    bar = ttk.Progressbar(win, mode='determinate')
+    ttk.Label(result_area, textvariable=status, wraplength=1360).pack(fill='x', padx=8)
+    bar = ttk.Progressbar(result_area, mode='determinate')
     bar.pack(fill='x', padx=8)
     progress_text = tk.StringVar(win)
-    ttk.Label(win, textvariable=progress_text).pack(fill='x', padx=8)
+    ttk.Label(result_area, textvariable=progress_text).pack(fill='x', padx=8)
     tracker = SearchProgress(bar, progress_text, app.localizer)
-    actions = ttk.Frame(win, padding=8)
+    actions = ttk.Frame(result_area, padding=8)
     actions.pack(fill='x')
-    table = ttk.Frame(win)
+    table = ttk.Frame(result_area)
     table.pack(fill='both', expand=True, padx=8, pady=4)
     tree = ttk.Treeview(table, columns=[key for key, _ in tool.COLUMNS], show='headings')
     for key, title in tool.COLUMNS:

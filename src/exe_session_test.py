@@ -60,13 +60,16 @@ def run(gui, phase, report_path):
         app = gui.App(root)
         root.withdraw()
         if phase == "write":
-            app._apply_state(dict(kind="stations", rows=ROWS, want="17", maxpages="6", language="en", tools=TOOLS))
+            app._apply_state(dict(kind="stations", rows=ROWS, want="17", maxpages="6", language="en",
+                                 appearance='dark', tools=TOOLS))
         else:
             restored = app._state_dict()
             assert restored["rows"] == ROWS, restored["rows"]
             assert restored["want"] == "17" and restored["maxpages"] == "6"
             assert restored["tools"] == TOOLS, restored["tools"]
             assert restored["language"] == "en"
+            assert restored['appearance'] == 'dark'
+            assert app.appearance_manager.effective == 'dark'
 
         rare = powerplay_gui.open_window(app, gui.data_age)
         app.carrier_parking_window()
@@ -113,7 +116,9 @@ def run(gui, phase, report_path):
         persisted = session_store.load(gui.SESSION_FILE)
         assert persisted["rows"] == ROWS and persisted["tools"] == TOOLS, persisted
         assert persisted["language"] == "en"
-        report.update(ok=True, session_file=gui.SESSION_FILE, rows=persisted["rows"], tools=persisted["tools"], language=persisted["language"])
+        assert persisted['appearance'] == 'dark'
+        report.update(ok=True, session_file=gui.SESSION_FILE, rows=persisted["rows"], tools=persisted["tools"],
+                      language=persisted["language"], appearance=persisted['appearance'])
     except Exception as exc:
         report["error"] = f"{type(exc).__name__}: {exc}"
     finally:

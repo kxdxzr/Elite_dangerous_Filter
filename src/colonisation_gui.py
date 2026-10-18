@@ -149,11 +149,11 @@ def open_window(app):
     controls.columnconfigure(0, weight=1)
     controls.columnconfigure(1, weight=1)
     ttk.Label(win, text='两套距离独立且同时启用时为 AND；最近距离先找最近人口达标星系，再判断上下限，包含边界。',
-              wraplength=1360, foreground='gray').pack(fill='x', padx=8)
+              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
     ttk.Label(win, text='强制：零人口、无任何站点（含航母）、明确无需许可。可选数值留空不限，0 是实际阈值。',
               wraplength=1360).pack(fill='x', padx=8)
     ttk.Label(win, text='in 多选及 between 范围用 | 分隔；布尔值用 true / false。互绕按共同直接质心和相同周期推定，复杂／缺失关系为未知。',
-              wraplength=1360, foreground='gray').pack(fill='x', padx=8)
+              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
     tabs = ttk.Notebook(win)
     tabs.pack(fill='x', padx=8, pady=5)
     body_tab, ring_tab = ttk.Frame(tabs), ttk.Frame(tabs)

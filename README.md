@@ -16,6 +16,8 @@ An Elite Dangerous system and station filtering desktop tool powered by [Spansh]
 
 [**Download Windows EXE v0.1.3**](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/download/v0.1.3/EliteDangerousFilter.exe) · [v0.1.3 release notes](docs/releases/v0.1.3.md) · [All releases](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
+**UI refactor Beta:** [Download v0.1.4-beta.1](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/tag/v0.1.4-beta.1) · [Beta release notes](docs/releases/v0.1.4-beta.1.md). **Pre-release; undiscovered bugs and regressions may remain.** Back up `%LOCALAPPDATA%\EliteDangerousFilter` before testing; the Beta shares the stable version's data directory. v0.1.3 remains the latest stable release.
+
 Run `EliteDangerousFilter.exe` on 64-bit Windows; no Python installation is needed. Searches require an internet connection, but no API key. The EXE is not code-signed, so Windows SmartScreen may warn on the first launch: choose **More info → Run anyway**, or verify the file against the `SHA256SUMS.txt` asset published with the release (`certutil -hashfile EliteDangerousFilter.exe SHA256`).
 
 For source execution, use **Python 3.10+ with tkinter**; there are no third-party runtime dependencies:
@@ -29,6 +31,8 @@ python filter_gui.py
 Check Tk with `python -m tkinter`. Debian / Ubuntu may require `sudo apt install python3-tk` first.
 
 Select **中文 / English** on the main window to switch all tool windows immediately. System, faction, ship and module names remain unchanged; switching language preserves raw query conditions.
+
+**v0.1.4-beta.1 (pre-release):** the header's **Appearance** selector offers **Follow system / Light / Dark**. Follow system is the default and follows Windows' app colour preference while the app is running; unsupported systems fall back to light. The choice is saved with the session. Open and newly created tool windows, tables, dropdowns and text areas share the theme. Fonts, spacing, alternating table rows and the primary search button have also been refreshed. Native file/OS dialogs retain the system appearance; title-bar colours depend on Windows support. Search rules, result sorting, CSV order and waypoint order are unchanged. These UI changes are not included in the stable v0.1.3 EXE.
 
 Repository: [kxdxzr/Elite_dangerous_Filter](https://github.com/kxdxzr/Elite_dangerous_Filter). Developed by **GPT-6.1 Sol** through **vibe coding**, with ongoing user-driven iteration.
 
@@ -108,7 +112,7 @@ Arrival distances in Ls also use exactly two decimal places throughout result ta
 
 **Updated v0.1.2 progress:** main search and all tools show measured stage counts and percentages when a denominator is known (candidate checks, station checks, body/ring batches or requested midpoint results). Percentages describe the labelled stage, not an estimated end-to-end duration. Network preparation and capped/unknown totals remain explicitly indeterminate with known counts; page budgets are not presented as a whole-database total. Stopped, failed or incomplete searches are distinguished from completed searches.
 
-The rare-goods detail table and CSV omit the redundant **Range** column. The 100 Ls / 1000 Ls fallback rule remains; v0.1.3 also deduplicates destinations by system. Download the latest v0.1.3 asset for all current updates.
+The rare-goods detail table and CSV omit the redundant **Range** column. The 100 Ls / 1000 Ls fallback rule remains; v0.1.3 also deduplicates destinations by system. v0.1.3 remains the stable release; the UI-refactor Beta is linked above.
 
 **Further improvements included in v0.1.3:** colonisation columns/CSV start with candidate name → top-three scan-value planets → nearest populated system → nearest distance → maximum pad → other information. Copy buttons cover relevant result names/systems/stations across the main and tool windows. Absent selection or empty fields show a prompt without clearing the clipboard. Double-click shortcuts remain available.
 
@@ -182,7 +186,7 @@ CLI entry point: `python spansh_filter.py --help`. Root launchers retain the old
 
 ## Screenshots
 
-Captured from the **v0.1.3 UI on 2026-10-17**, covering the main window, its detailed system-condition editor, and **all seven built-in tools**. These are real application windows populated with **offline illustrative data**, explicitly labelled by the yellow banner. They do **not** show live inventory, actual missions, claimable systems or verified routes. Windows are widened where needed to show controls; click an image for full resolution. [Chinese screenshots](README_zh-CN.md#截图).
+Captured from the **v0.1.4-beta.1 UI on 2026-10-18 (Light appearance)**, covering the main window, its detailed system-condition editor, and **all seven built-in tools**. These are real application windows populated with **offline illustrative data**, explicitly labelled by the yellow banner. They do **not** show live inventory, actual missions, claimable systems or verified routes. Windows are widened where needed to show controls; click an image for full resolution. The stable v0.1.3 UI differs. [Chinese screenshots](README_zh-CN.md#截图).
 
 [Main search](#main-window) · [Rare goods](#rare-goods-target-finder) · [Pirate candidates](#pirate-massacre-finder-testing-1) · [Carrier parking](#carrier-parking-finder) · [Midpoint](#system-midpoint-finder) · [Colonisation](#colonisation-candidate-finder-1) · [Neutron routes](#neutron-jump-planner) · [Engineer shopping](#engineer-trip-shopping)
 
@@ -263,11 +267,11 @@ Multiple independently specified shopping items, engineer selection, custom rang
 
 Screenshot refreshes are reproducible on Windows with optional developer dependency **Pillow 12**: `python scripts/capture_screenshots.py`. The script blocks network access, isolates sessions and records version/dimensions/checksums in [screenshots.json](docs/images/screenshots.json); Pillow is not required to run the application.
 
-The screenshots include the English-label correction (Search / Copy station name / Close), which the rebuilt v0.1.3 release executable also contains; the release's `SHA256SUMS.txt` matches the rebuilt asset.
+The gallery shows the UI-refactor Beta, not the older stable EXE. Each release provides its own `SHA256SUMS.txt`; passing checks does not rule out potential Beta bugs.
 
 ## CSV exports and provenance
 
-All CSV exports start with five `# `-prefixed provenance rows: GitHub project author (`kxdxzr`), project name, version **0.1.3**, timezone-aware export time and project URL. A blank row follows, then the result header and data. Labels follow the UI language; English exports use English labels. Main-window CSV columns follow the completed search conditions instead of exporting raw JSON. CSV readers must skip the five provenance rows and blank separator. Metadata identifies the software, not ownership of upstream game data; existing CSV files are not modified.
+All CSV exports start with five `# `-prefixed provenance rows: GitHub project author (`kxdxzr`), project name, application version (**0.1.4-beta.1** in this Beta), timezone-aware export time and project URL. A blank row follows, then the result header and data. Labels follow the UI language; English exports use English labels. Main-window CSV columns follow the completed search conditions instead of exporting raw JSON. CSV readers must skip the five provenance rows and blank separator. Metadata identifies the software, not ownership of upstream game data; existing CSV files are not modified.
 
 ## Data sources
 

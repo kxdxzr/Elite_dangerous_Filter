@@ -16,6 +16,8 @@
 
 [**下载 Windows EXE v0.1.3**](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/download/v0.1.3/EliteDangerousFilter.exe) · [v0.1.3 发布说明](docs/releases/v0.1.3.md) · [所有版本](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
+**UI 重构 Beta：**[下载 v0.1.4-beta.1](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/tag/v0.1.4-beta.1) · [Beta 发布说明](docs/releases/v0.1.4-beta.1.md)。**预发布，不保证没有潜在 Bug，可能存在回归问题。** 测试前请备份 `%LOCALAPPDATA%\EliteDangerousFilter`，Beta 与稳定版共用数据目录。v0.1.3 仍为最新稳定版。
+
 Windows 64 位单文件程序，双击 `EliteDangerousFilter.exe` 即可使用，无需安装 Python。实际查询需要联网，无需 API key。EXE 未做代码签名，首次运行可能弹出 SmartScreen 警告：选择 **更多信息 → 仍要运行**，或用发布页的 `SHA256SUMS.txt` 校验文件（`certutil -hashfile EliteDangerousFilter.exe SHA256`）。
 
 从源码运行需要 **Python 3.10+ 和 tkinter**，没有第三方运行依赖：
@@ -29,6 +31,8 @@ python filter_gui.py
 可运行 `python -m tkinter` 检查 Tk。Debian / Ubuntu 可先安装 `sudo apt install python3-tk`。
 
 主界面右侧选择 **中文 / English**，即时切换主界面及辅助窗口。游戏中的星系、派系、船和模块名称保持原文；切换语言不会改变查询条件。
+
+**v0.1.4-beta.1（预发布）：**顶部的 **外观** 可选 **跟随系统／浅色／深色**。默认跟随系统，运行中跟随 Windows 的应用颜色设置；不支持的系统回退到浅色。选择随会话保存，已打开及新建的工具窗口、表格、下拉列表与文本输入区统一切换。同时调整字体、间距、表格交替行底色和主要搜索按钮。原生文件选择／系统对话框保留系统外观，标题栏颜色视 Windows 支持情况而定。检索规则、结果排序、CSV 顺序及有序途经点均不改变。稳定版 v0.1.3 EXE 不包含本次 UI 改动。
 
 仓库：[kxdxzr/Elite_dangerous_Filter](https://github.com/kxdxzr/Elite_dangerous_Filter)。项目由 **GPT-6.1 Sol** 通过 **vibe coding** 完成，并根据用户需求持续迭代。
 
@@ -108,7 +112,7 @@ python filter_gui.py
 
 **v0.1.2 更新版进度调整：** 主界面及所有工具在总量已知时展示真实的阶段计数和百分比（候选核查、站点复核、天体／星环批次或中点目标结果数）。百分比仅对应标注的当前阶段，不是整体耗时预测。网络准备及封顶／未知总量明确显示总量未知和已处理数，不将页数预算当成全库总量；停止、失败、未完成与完成分别显示。
 
-稀有商品明细表与CSV移除重复的**范围**列，100 Ls／1000 Ls回退规则保留；v0.1.3进一步按星系合并目的地。请下载最新v0.1.3获取当前全部更新。
+稀有商品明细表与CSV移除重复的**范围**列，100 Ls／1000 Ls回退规则保留；v0.1.3进一步按星系合并目的地。v0.1.3继续作为稳定版，UI重构Beta下载入口见上方。
 
 **v0.1.3同时包含：**殖民表格／CSV依次显示候选星系、扫描价值前三、最近有人星系、最近距离、最大停机坪等信息。主界面与各工具提供对应名称／星系／站点复制按钮；未选择或字段为空时提示，不清空原剪贴板，并保留双击快捷操作。
 
@@ -182,7 +186,7 @@ CLI 示例：`python spansh_filter.py --help`；参数说明见 [筛选器说明
 
 ## 截图
 
-以下截图于**2026-10-17使用v0.1.3界面重新拍摄**，覆盖主窗口、星系详细条件编辑器及**全部七个内置工具**。均为实际应用窗口，填入**离线演示数据**，顶部黄色横幅明确标注；不代表实时库存、任务、可殖民星系或已验证航线。必要时加宽窗口以展示控件，点击图片可查看原尺寸。[英文截图](README.md#screenshots)。
+以下截图于**2026-10-18使用v0.1.4-beta.1界面（浅色外观）重新拍摄**，覆盖主窗口、星系详细条件编辑器及**全部七个内置工具**。均为实际应用窗口，填入**离线演示数据**，顶部黄色横幅明确标注；不代表实时库存、任务、可殖民星系或已验证航线。必要时加宽窗口以展示控件，点击图片可查看原尺寸。稳定版v0.1.3界面与此不同。[英文截图](README.md#screenshots)。
 
 [主界面](#主界面) · [稀有商品](#稀有商品目标查找器) · [海盗任务](#海盗任务查找器测试中) · [航母车位](#航母车位查找器) · [两系中点](#两系中点工具) · [殖民候选](#殖民候选星系查找器-1) · [中子规划](#中子星跳跃规划器) · [工程师采购](#工程师途中采购)
 
@@ -263,11 +267,11 @@ CLI 示例：`python spansh_filter.py --help`；参数说明见 [筛选器说明
 
 截图可在Windows使用可选开发依赖**Pillow 12**重拍：`python scripts/capture_screenshots.py`。脚本禁用网络、隔离会话，并在[screenshots.json](docs/images/screenshots.json)记录版本、尺寸及校验值；应用运行不需要Pillow。
 
-截图已包含补齐的英文按钮翻译（Search／Copy station name／Close）；v0.1.3发布EXE已重建并包含该修复，发布页`SHA256SUMS.txt`对应重建后的附件。
+截图展示UI重构Beta，而非旧版稳定EXE。各发行版分别提供对应附件的`SHA256SUMS.txt`；通过校验和测试不代表Beta没有潜在Bug。
 
 ## CSV 导出与来源信息
 
-所有CSV导出顶部为5行以`# `开头的来源信息：作者kxdxzr、项目名、版本**0.1.3**、含时区导出时间和项目链接；随后空行、结果表头和数据。标签跟随界面语言，英文导出使用英文标签。主窗口按已完成搜索条件拆列，不再导出原始JSON。读取CSV须跳过5行来源及1个空行；来源标识软件而非上游游戏数据版权，已有CSV不会被修改。
+所有CSV导出顶部为5行以`# `开头的来源信息：作者kxdxzr、项目名、程序版本（本Beta为**0.1.4-beta.1**）、含时区导出时间和项目链接；随后空行、结果表头和数据。标签跟随界面语言，英文导出使用英文标签。主窗口按已完成搜索条件拆列，不再导出原始JSON。读取CSV须跳过5行来源及1个空行；来源标识软件而非上游游戏数据版权，已有CSV不会被修改。
 
 ## 数据来源
 
