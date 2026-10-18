@@ -278,6 +278,8 @@ All CSV exports start with five `# `-prefixed provenance rows: GitHub project au
 
 ## License
 
-This project is released under the [MIT License](LICENSE). The licence covers this project's own source code; upstream game data and third-party API content remain subject to their respective terms (see [Data sources](#data-sources)).
+Copyright (c) 2026 kxdxzr. Starting with the commit introducing this notice, this project's own code and documentation are licensed under the [GNU General Public License, version 3 only](LICENSE) (`GPL-3.0-only`). Commercial use is permitted; redistribution of covered binaries or modified versions must comply with the GPL, including providing the Corresponding Source and preserving required notices. This program is provided without any warranty; see LICENSE for the full terms.
+
+This change does not revoke MIT permissions previously granted for copies published under MIT (including repository commits `afe84c4` and `2393198`). Existing release tags and EXE assets have not been replaced or retroactively relicensed. Third-party code, game data and API content remain subject to their respective licences and terms; this notice does not relicense them.
 
 Community project, not affiliated with Frontier Developments.
