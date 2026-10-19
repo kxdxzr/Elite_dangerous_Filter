@@ -241,9 +241,14 @@ class AppearanceGuiTests(unittest.TestCase):
                     self.root.update()
                     self.assertTrue(window.result_tree.winfo_ismapped())
                     self.assertGreater(window.result_tree.winfo_height(), 100)
-                    window.settings_canvas.yview_moveto(1)
-                    self.assertGreater(window.settings_canvas.yview()[0], 0)
-                    window.settings_canvas.yview_moveto(0)
+                    if method == 'pve_window':
+                        window.settings_canvas.yview_moveto(1)
+                        self.assertGreater(window.settings_canvas.yview()[0], 0)
+                        window.settings_canvas.yview_moveto(0)
+                    else:
+                        self.assertFalse(hasattr(window, 'settings_canvas'))
+                        self.assertGreaterEqual(window.purchase_canvas.winfo_height(),
+                                                2 * window.purchase_row.frame.winfo_reqheight())
             window.destroy()
 
     def test_copy_and_export_footers_remain_visible(self):

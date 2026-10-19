@@ -22,13 +22,15 @@ def open_window(app, data_age):
     minimum, maximum = tk.StringVar(value="200"), tk.StringVar(value="220")
     pages = tk.StringVar(value="20")
     ttk.Label(controls, text="商品来源星系").pack(side="left")
-    cb_ref = ttk.Combobox(controls, textvariable=reference, width=22,
+    cb_ref = ttk.Combobox(controls, textvariable=reference, width=36,
                           state="readonly", values=sources.SOURCE_SYSTEMS)
-    cb_ref.pack(side="left", padx=4)
+    cb_ref.pack(side="left", padx=4, fill='x', expand=True)
+    distances = ttk.Frame(win, padding=(8, 0))
+    distances.pack(fill='x')
     for label, variable in (("最小距离 ly", minimum), ("最大距离 ly", maximum),
                             ("每轮最多页数", pages)):
-        ttk.Label(controls, text=label).pack(side="left", padx=(8, 0))
-        ttk.Entry(controls, textvariable=variable, width=7).pack(side="left", padx=4)
+        ttk.Label(distances, text=label).pack(side="left", padx=(8, 0))
+        ttk.Entry(distances, textvariable=variable, width=7).pack(side="left", padx=4)
     source_filter = ttk.Frame(win, padding=(8, 4))
     source_filter.pack(fill="x")
     ttk.Label(source_filter, text="筛选来源（星系／商品／站名）").pack(side="left")
@@ -56,9 +58,9 @@ def open_window(app, data_age):
     options.pack(fill="x")
     ttk.Label(options, text="Power（关联势力）").pack(side="left")
     power = tk.StringVar(value=tool.POWER_LABELS[tool.POWERS[0]])
-    cb_power = ttk.Combobox(options, textvariable=power, state="readonly", width=25,
+    cb_power = ttk.Combobox(options, textvariable=power, state="readonly", width=36,
                             values=[tool.POWER_LABELS[p] for p in tool.POWERS])
-    cb_power.pack(side="left", padx=4)
+    cb_power.pack(side="left", padx=4, fill='x', expand=True)
     all_powers = tk.BooleanVar(value=False)
     ttk.Checkbutton(options, text="全势力扫描（12个）", variable=all_powers,
                     command=lambda: cb_power.configure(state="disabled" if all_powers.get()

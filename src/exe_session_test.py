@@ -13,10 +13,13 @@ ROWS = [
     dict(type="distance", ref="", min="unfinished", max="", mode="范围外"),
 ]
 TOOLS = {
+    'full_outfitting': dict(reference='Sirius', radius='180', want='12', max_pages='3',
+                           other_discounts=True, neutral_ships=True, federal_ships=False,
+                           imperial_ships=True, guardian=True, special_equipment=True, require_discount=True),
     "rare_goods": dict(reference="Leesti", minimum="205", maximum="219", pages="9",
                         query="Azure", power="Yuri Grom", all_powers=True, neutron_only=False),
     "carrier_parking": dict(reference="Lave", radius="45", pages="7",
-                            min_carriers="0", max_carriers="17", exclude_permit=False),
+                            max_carriers="17", exclude_permit=False),
     "midpoint": dict(a="Sol", b="Ngurii", want="15", populated_only=True, exclude_permit=True),
     "pve": dict(reference="Sol", radius="0", min_factions="0", min_federation="2", min_empire="1",
                  site_type='仅 Low RES',
@@ -33,7 +36,7 @@ SHOPPING_ROWS = [
             'module_slot': '武器挂点', 'condition_category': '不限', 'module_spec': '2C'}),
 ]
 TOOLS['engineer_shopping'] = dict(
-    pledged_power='Jerome Archer', assume_max_rank=True,
+    pledged_power='Jerome Archer',
     landing_pad='L',
     origin='LHS 336', destination='Didi Vatermann — Leesti', jump_range='90', max_extra_jumps='2',
     arrival_ls='1200', want='20', max_pages='5', ignore_carriers=True, ignore_planetary=True,
@@ -77,7 +80,9 @@ def run(gui, phase, report_path):
         rare = powerplay_gui.open_window(app, gui.data_age)
         app.carrier_parking_window()
         app.midpoint_window()
-        windows = {"rare_goods": rare, "pve": app.pve_window(), 'engineer_shopping': app.engineer_shopping_window()}
+        windows = {"rare_goods": rare, "pve": app.pve_window(),
+                   'engineer_shopping': app.engineer_shopping_window(),
+                   'full_outfitting': app.full_outfitting_window()}
         assert len(windows['engineer_shopping'].purchase_rows) == 2
         assert [c['values'] for c in windows['engineer_shopping'].criteria()[0].conditions[:2]] == [['Shield Booster'], ['Plasma Accelerator']]
         for window in root.winfo_children():

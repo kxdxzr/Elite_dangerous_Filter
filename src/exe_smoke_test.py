@@ -47,8 +47,13 @@ def run(gui, report_path):
         assert pve.title() == "海盗任务查找器"
         colony = app.colonisation_window()
         shopping = app.engineer_shopping_window()
-        assert shopping.session_variables['assume_max_rank'].get() is True
-        assert 'Jerome Archer' in tuple(shopping.pledged_power_box['values'])
+        assert 'assume_max_rank' not in shopping.session_variables
+        assert any(value.startswith('Jerome Archer') for value in shopping.pledged_power_box['values'])
+        outfitting = app.full_outfitting_window()
+        assert outfitting.title() == '全配件折扣站查找器'
+        assert not outfitting.criteria()[0].other_discounts
+        assert not outfitting.criteria()[0].special_equipment
+        assert not outfitting.criteria()[0].require_discount
         assert 'landing_pad' in shopping.session_variables
         assert tuple(shopping.landing_pad_box['values']) == ('不限', 'S', 'M', 'L')
         app.set_appearance('dark')
@@ -88,7 +93,7 @@ def run(gui, report_path):
         assert app.tree.set(app.tree.get_children()[0], 'name') == 'Shop 2'
         assert app.results[0]['name'] == 'Shop 10'
         assert not hasattr(app, 'route_window')
-        assert button(root, '中子星规划器（独立项目）') is not None
+        assert not hasattr(app, 'neutron_planner_project')
         assert 'population' not in colony.result_tree['columns']
         assert all(key in colony.result_tree['columns'] for key in ('scan1', 'scan2', 'scan3', 'neighbour_pad'))
         assert 'max_pages' not in colony.session_variables
@@ -101,6 +106,7 @@ def run(gui, report_path):
         assert colony.criteria().body_groups[0][0]['field'] == '_is_binary'
         app.set_language("en")
         assert shopping.title() == 'Engineer trip shopping'
+        assert outfitting.title() == 'Full-outfitting discount station finder'
         assert colony.title() == "Colonisation candidate finder"
         assert button(colony, '查询').cget('text') == 'Search'
         assert button(shopping, '查询').cget('text') == 'Search'

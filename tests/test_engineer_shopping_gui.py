@@ -102,6 +102,20 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         self.assertEqual(restored.session_variables['landing_pad'].get(), 'M')
         self.assertEqual(restored.criteria(), before)
 
+    def test_fixed_form_shows_two_purchases_and_scrolls_only_the_list(self):
+        win = self.app.engineer_shopping_window()
+        win.add_purchase()
+        self.root.update()
+        self.assertFalse(hasattr(win, 'settings_canvas'))
+        height = win.purchase_canvas.winfo_height()
+        self.assertGreaterEqual(height, sum(row.frame.winfo_reqheight() for row in win.purchase_rows))
+        win.add_purchase()
+        self.root.update()
+        self.assertEqual(win.purchase_canvas.winfo_height(), height)
+        win.purchase_canvas.yview_moveto(1)
+        self.assertGreater(win.purchase_canvas.yview()[0], 0)
+        self.assertGreater(win.result_tree.winfo_height(), 100)
+
     def test_old_or_invalid_saved_pad_defaults_to_any(self):
         for state in ({}, {'landing_pad': 'XL'}, {'landing_pad': ''}):
             self.app._tool_states['engineer_shopping'] = state
@@ -111,27 +125,44 @@ class EngineerShoppingGuiTests(unittest.TestCase):
 
     def test_pledged_power_defaults_max_rank_and_survives_language_and_reopen(self):
         win = self.app.engineer_shopping_window()
+        self.assertEqual(tuple(win.pledged_power_box['values']), (
+            '无', 'Arissa Lavigny-Duval（战斗武器最高30%）', 'Denton Patreus（战斗武器最高40%）',
+            'Jerome Archer（战斗武器最高30%）', 'Yuri Grom（战斗武器最高30%）'))
         self.populate(win)
         self.assertEqual(win.session_variables['pledged_power'].get(), '无')
-        self.assertTrue(win.session_variables['assume_max_rank'].get())
+        self.assertNotIn('assume_max_rank', win.session_variables)
         self.app.set_language('en')
         self.assertEqual(win.pledged_power_box._display.get(), 'None')
         self.app.set_language('zh')
         self.assertEqual(str(win.pledged_power_box['state']), 'readonly')
         win.session_variables['pledged_power'].set('Jerome Archer')
+        self.assertEqual(win.pledged_power_box._display.get(), 'Jerome Archer（战斗武器最高30%）')
         criteria = win.criteria()[0]
         self.assertEqual(criteria.pledged_power, 'Jerome Archer')
         self.assertEqual(criteria.conditions[0]['personal_power'], 'Jerome Archer')
         self.app.set_language('en')
         self.assertIn('maximum-rank', win.personal_discount_note.cget('text'))
+        self.assertEqual(win.pledged_power_box._display.get(), 'Jerome Archer (combat weapons up to 30%)')
+        win.pledged_power_box._display.set('Denton Patreus (combat weapons up to 40%)')
+        self.assertEqual(win.session_variables['pledged_power'].get(), 'Denton Patreus')
+        win.session_variables['pledged_power'].set('Jerome Archer')
         self.assertEqual(win.criteria()[0], criteria)
-        win.session_variables['assume_max_rank'].set(False)
+        win.session_variables['pledged_power'].set('无')
         self.assertNotIn('personal_power', win.criteria()[0].conditions[0])
+        win.session_variables['pledged_power'].set('Jerome Archer')
         self.app._tool_states['engineer_shopping'] = self.app._state_dict()['tools']['engineer_shopping']
         win.destroy()
         restored = self.app.engineer_shopping_window()
         self.assertEqual(restored.session_variables['pledged_power'].get(), 'Jerome Archer')
-        self.assertFalse(restored.session_variables['assume_max_rank'].get())
+        self.assertNotIn('assume_max_rank', restored.session_variables)
+        self.assertEqual(restored.criteria()[0].conditions[0]['personal_power'], 'Jerome Archer')
+
+    def test_saved_power_without_personal_discount_defaults_to_none(self):
+        for power in ('Li Yong-Rui', 'Edmund Mahon', 'invalid'):
+            self.app._tool_states['engineer_shopping'] = {'pledged_power': power}
+            win = self.app.engineer_shopping_window()
+            self.assertEqual(win.session_variables['pledged_power'].get(), '无')
+            win.destroy()
 
     def test_single_spec_selector_and_saved_raw_spec_draft(self):
         win = self.app.engineer_shopping_window()

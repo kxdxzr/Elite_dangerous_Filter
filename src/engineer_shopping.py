@@ -16,12 +16,11 @@ class Criteria:
     conditions: list
     landing_pad: str = ''
     pledged_power: str = ''
-    assume_max_rank: bool = True
 
 
 def build_criteria(origin, destination, jump_range, arrival_ls, module,
                    ignore_carriers=True, max_extra_jumps=1, ignore_planetary=False, landing_pad='',
-                   pledged_power='', assume_max_rank=True):
+                   pledged_power=''):
     origin, destination = origin.strip(), destination.strip()
     if not origin or not destination:
         raise ValueError('请填写出发星系和工程师星系')
@@ -45,8 +44,6 @@ def build_criteria(origin, destination, jump_range, arrival_ls, module,
         landing_pad = ''
     from powerplay_tool import normalize_power
     pledged_power = '' if pledged_power in ('', '无') else normalize_power(pledged_power)
-    if not isinstance(assume_max_rank, bool):
-        raise ValueError('满级优惠选项须为布尔值')
     modules = [module] if isinstance(module, dict) else module
     if not isinstance(modules, list) or not modules:
         raise ValueError('请至少添加一项采购模组／舰载武器')
@@ -72,11 +69,11 @@ def build_criteria(origin, destination, jump_range, arrival_ls, module,
     for condition in conditions:
         # Never inherit a stale personal bonus from imported purchase conditions.
         condition.pop('personal_power', None)
-        if condition.get('field') == 'modules' and pledged_power and assume_max_rank:
+        if condition.get('field') == 'modules' and pledged_power:
             condition['personal_power'] = pledged_power
     return Criteria(origin, destination, jump_range, max_extra_jumps,
                     eng.normalize_conditions('stations', conditions), landing_pad,
-                    pledged_power, assume_max_rank)
+                    pledged_power)
 
 
 def confirmed_pad(row):
@@ -116,11 +113,11 @@ def search(criteria, want=100, max_pages=25, progress=None, stop=None):
     criteria = copy.deepcopy(criteria)
     conditions = criteria.conditions
     notes, corrections = [], []
-    if criteria.pledged_power and criteria.assume_max_rank:
+    if criteria.pledged_power:
         notes.append('个人优惠按满级假设计算，未核验实际等级或结算价。')
     cancelled = lambda: stop is not None and stop.is_set()
     result = dict(rows=[], conditions=conditions, landing_pad=criteria.landing_pad,
-                  pledged_power=criteria.pledged_power, assume_max_rank=criteria.assume_max_rank,
+                  pledged_power=criteria.pledged_power, assume_max_rank=bool(criteria.pledged_power),
                   total=0, scanned=0, notes=notes, stopped=False)
     if cancelled():
         notes.append('已手动停止，尚未发送请求')

@@ -26,7 +26,7 @@ class EngineerShoppingTests(unittest.TestCase):
         self.assertIn('30', records[0])
         self.assertTrue(any('assumed max-rank' in str(value) for value in records[0]))
         self.assertEqual(result['pledged_power'], 'Jerome Archer')
-        for kwargs in ({}, dict(pledged_power='Jerome Archer', assume_max_rank=False)):
+        for kwargs in ({}, dict(pledged_power='无')):
             other = tool.build_criteria('Start', 'Leesti', 80, '', condition, **kwargs)
             self.assertNotIn('personal_power', other.conditions[0])
             self.assertFalse(eng.match_field('stations', row, other.conditions[0]))

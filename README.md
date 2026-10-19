@@ -1,5 +1,11 @@
 # Elite_dangerous_Filter
 
+**Unreleased source tool:** [Full-outfitting discount station finder](docs/full-outfitting.md): all known ordinary/Power variants at the same station, with optional discount requirements (off by default). No carriers, including Stronghold Carriers. Optional ship groups with matching hull armour and a Guardian technology broker. Not in the published Beta.2 EXE.
+
+Merc Coins special equipment is a separate, default-off requirement. Jameson Memorial is a positive regression benchmark, not an injected or fixed result. The Sol / 500 ly / 50 results / 25 pages / other public discounts live regression passed on 2026-10-20; see [validation details](docs/full-outfitting.md#创世正向回归基准).
+
+**Next-version source change:** selecting a Power always assumes its maximum-rank discount on applicable weapons; the checkbox is removed. Actual rank is not read. Select None for public discounts only.
+
 [English](README.md) · [简体中文](README_zh-CN.md) · [Releases](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
 [Detailed search logic and tool rules](docs/README_search_logic.md)
@@ -125,7 +131,7 @@ The rare-goods detail table and CSV omit the redundant **Range** column. The 100
 ## Neutron jump planner
 
 **Moved to [a separate project](https://github.com/kxdxzr/Elite_dangerous_Neutron_Planner).**
-The current filter source no longer includes the planner; its button opens the new repository.
+The current filter source no longer includes the planner or a UI link to it; use the repository link above.
 Old favourites are not deleted: import `route_ship_favorites.json` explicitly in the standalone tool,
 which uses a separate data directory. The planning instructions below describe the older published
 v0.1.3 / v0.1.4-beta.1 EXEs, not current source. Rare-goods geometric alignment remains in this filter.

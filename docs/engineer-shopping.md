@@ -1,5 +1,9 @@
 # Engineer trip shopping / 工程师途中采购
 
+**下一版源码调整：**移除满级优惠开关，选定 Power 后统一按满级适用武器优惠计算，未读取实际等级；选择“无”仅计算公共优惠。旧会话开关不再生效，下文开关说明仅适用于旧 Beta。
+
+**Next-version source change:** the checkbox is removed. Selecting a Power always assumes maximum-rank bonuses on applicable weapons, without reading actual rank; select None for public discounts only. Old checkbox values are ignored. Checkbox descriptions below refer to older Betas.
+
 **Release status / 发布状态：** all source additions described below are included in
 [v0.1.4-beta.2](releases/v0.1.4-beta.2.md). References to “not in beta.1” distinguish the older EXE.
 下述源码新增功能已包含在beta.2；“未包含在beta.1”仅用于区分旧EXE。

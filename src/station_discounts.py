@@ -24,6 +24,8 @@ ATTILIUS_SHIPS = {key(n) for n in ('Sidewinder', 'Sidewinder MkI', 'Eagle', 'Eag
 ATTILIUS_MODULES = {key(n) for n in ('Pulse Laser', 'Burst Laser', 'Beam Laser', 'Cannon', 'Multi-Cannon',
     'Rail Gun', 'Railgun', 'Chaff Launcher', 'Heat Sink Launcher', 'Heatsink Launcher')}
 CONTROLLED_STATES = {'exploited', 'fortified', 'stronghold'}
+# Shared by the public-rule evaluator and full-outfitting candidate queries.
+ALL_MODULE_PUBLIC_STATIONS = (('Shinrarta Dezhra', 'Jameson Memorial', 10),)
 MAX_RANK_WEAPON_DISCOUNTS = {key(name): percent for name, percent in (
     ('A. Lavigny-Duval', 30), ('Arissa Lavigny-Duval', 30),
     ('Denton Patreus', 40), ('Jerome Archer', 30), ('Yuri Grom', 30))}
@@ -57,8 +59,9 @@ def discount_info(row, item, field, personal_power=''):
     def add(percent, source):
         rules.append(dict(discounted=True, percent=percent, source=source))
 
-    if (system, station) == (key('Shinrarta Dezhra'), key('Jameson Memorial')):
-        add(10, 'Jameson Memorial')
+    for system_name, station_name, percent in ALL_MODULE_PUBLIC_STATIONS:
+        if (system, station) == (key(system_name), key(station_name)):
+            add(percent, station_name)
     if power == key('Li Yong-Rui') and state in ('fortified', 'stronghold'):
         add(15, 'Li Yong-Rui')
     if field == 'ships':

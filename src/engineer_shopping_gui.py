@@ -11,6 +11,13 @@ from engineer_destinations import CHOICES, destination_choice
 from export_metadata import write_csv_provenance
 from localized_tk import ttk, messagebox, Toplevel
 from powerplay_tool import POWERS, POWER_LABELS, normalize_power
+from station_discounts import MAX_RANK_WEAPON_DISCOUNTS, key
+
+
+PERSONAL_DISCOUNT_POWERS = tuple(power for power in POWERS if key(power) in MAX_RANK_WEAPON_DISCOUNTS)
+PERSONAL_DISCOUNT_LABELS = {
+    POWER_LABELS[power]: f'{POWER_LABELS[power]}（战斗武器最高{MAX_RANK_WEAPON_DISCOUNTS[key(power)]}%）'
+    for power in PERSONAL_DISCOUNT_POWERS}
 
 
 def open_window(app):
@@ -19,12 +26,13 @@ def open_window(app):
     win = Toplevel(app.root)
     win.title('工程师途中采购')
     win.geometry('1320x820')
-    from form_scroll import settings_form
-    form = settings_form(win)
+    # Two complete purchase editors and a usable result table need this height.
+    win.minsize(1100, 820)
+    form = ttk.Frame(win)
+    form.pack(fill='x')
     variables = {key: tk.StringVar(win, value=value) for key, value in dict(
         origin='', destination='', jump_range='80', max_extra_jumps='1', arrival_ls='1500', want='100',
         max_pages='25', landing_pad='不限', pledged_power='无').items()}
-    variables['assume_max_rank'] = tk.BooleanVar(win, value=True)
     variables['ignore_carriers'] = tk.BooleanVar(win, value=True)
     variables['ignore_planetary'] = tk.BooleanVar(win, value=False)
     variables['purchases'] = tk.StringVar(win, value='')
@@ -36,8 +44,9 @@ def open_window(app):
                                          ('want', '最多结果'), ('max_pages', '最多页数'),
                                          ('landing_pad', '采购站停机坪（可停靠船型）'),
                                          ('pledged_power', '效忠 Power（个人优惠）'))):
-        grid_row, grid_column = divmod(index, 4)
-        ttk.Label(route, text=title).grid(row=grid_row * 2, column=grid_column, sticky='w', padx=4)
+        grid_row, grid_column = divmod(index, 3)
+        ttk.Label(route, text=title, wraplength=110).grid(
+            row=grid_row, column=grid_column * 2, sticky='w', padx=4)
         if key == 'destination':
             entry = ttk.Combobox(route, textvariable=variables[key], values=CHOICES, state='readonly', width=36)
             win.destination_box = entry
@@ -46,7 +55,8 @@ def open_window(app):
             attach_system_suggest(entry, variables[key])
         elif key == 'pledged_power':
             entry = ttk.Combobox(route, textvariable=variables[key],
-                                 values=['无'] + [POWER_LABELS[p] for p in POWERS], state='readonly', width=26)
+                                 values=['无'] + [POWER_LABELS[p] for p in PERSONAL_DISCOUNT_POWERS],
+                                 value_labels=PERSONAL_DISCOUNT_LABELS, state='readonly', width=42)
             win.pledged_power_box = entry
         elif key == 'landing_pad':
             entry = ttk.Combobox(route, textvariable=variables[key], values=['不限', 'S', 'M', 'L'],
@@ -54,8 +64,9 @@ def open_window(app):
             win.landing_pad_box = entry
         else:
             entry = ttk.Entry(route, textvariable=variables[key], width=12)
-        entry.grid(row=grid_row * 2 + 1, column=grid_column, sticky='ew', padx=4, pady=4)
-        route.columnconfigure(grid_column, weight=1)
+        entry.configure(width=20)
+        entry.grid(row=grid_row, column=grid_column * 2 + 1, sticky='ew', padx=4, pady=2)
+        route.columnconfigure(grid_column * 2 + 1, weight=1)
 
     purchase = ttk.LabelFrame(form, text='采购模组／舰载武器', padding=5)
     purchase.pack(fill='x', padx=8, pady=4)
@@ -63,16 +74,31 @@ def open_window(app):
     purchase_actions.pack(fill='x')
     area = ttk.Frame(purchase)
     area.pack(fill='x')
-    canvas = tk.Canvas(area, height=165, highlightthickness=0)
+    canvas = tk.Canvas(area, height=150, highlightthickness=0)
+    win.purchase_canvas = canvas
     purchase_scroll = ttk.Scrollbar(area, orient='vertical', command=canvas.yview)
     canvas.configure(yscrollcommand=purchase_scroll.set)
     canvas.pack(side='left', fill='x', expand=True)
     purchase_scroll.pack(side='right', fill='y')
     purchase_frame = ttk.Frame(canvas)
     purchase_item = canvas.create_window((0, 0), window=purchase_frame, anchor='nw')
-    purchase_frame.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+    def resize_purchases(event=None):
+        canvas.configure(scrollregion=canvas.bbox('all'))
+        if purchase_rows:
+            canvas.configure(height=2 * max(row.frame.winfo_reqheight() for row in purchase_rows))
+
+    purchase_frame.bind('<Configure>', resize_purchases)
     canvas.bind('<Configure>', lambda e: canvas.itemconfigure(purchase_item, width=e.width))
     purchase_rows = []
+
+    def scroll_purchases(event):
+        if (event.delta and not isinstance(event.widget, (ttk.Combobox, ttk.Treeview))
+                and canvas.winfo_rootx() <= event.x_root < canvas.winfo_rootx() + canvas.winfo_width()
+                and canvas.winfo_rooty() <= event.y_root < canvas.winfo_rooty() + canvas.winfo_height()):
+            canvas.yview_scroll(-1 if event.delta > 0 else 1, 'units')
+            return 'break'
+
+    win.bind('<MouseWheel>', scroll_purchases, add='+')
 
     def bind_first_row():
         # Keep legacy single-item session keys readable; purchases is authoritative.
@@ -102,6 +128,7 @@ def open_window(app):
 
     def add_purchase(saved=None):
         row = Row(purchase_frame, 'stations')
+        row.cb_val.configure(width=40)
         row.field.set(field_label('stations', 'modules'))
         row.v_discount.set('是')
         # Each entry has independent name/specification/freshness/discount controls.
@@ -129,7 +156,8 @@ def open_window(app):
         variables['landing_pad'].set('不限')
     if variables['pledged_power'].get() != '无':
         try:
-            variables['pledged_power'].set(POWER_LABELS[normalize_power(variables['pledged_power'].get())])
+            power = normalize_power(variables['pledged_power'].get())
+            variables['pledged_power'].set(POWER_LABELS[power] if power in PERSONAL_DISCOUNT_POWERS else '无')
         except ValueError:
             variables['pledged_power'].set('无')
     # Restore the full list, or migrate the old single-entry parameter set.
@@ -148,14 +176,23 @@ def open_window(app):
         first.refresh_options()
     ttk.Button(purchase_actions, text='添加采购项', command=add_purchase).pack(side='left', padx=4, pady=3)
     ttk.Label(purchase_actions, text='同一站点须同时满足全部采购项；同一行多选名称也要求全部有货。').pack(side='left', padx=6)
-    ttk.Label(form, text='前往工程师途中，寻找少绕路的模组／舰载武器售卖点，可筛选已知折扣。',
+    notes = ttk.Frame(form)
+    show_notes = tk.BooleanVar(win, value=False)
+
+    def toggle_notes():
+        if show_notes.get():
+            notes.pack(fill='x')
+        else:
+            notes.pack_forget()
+
+    ttk.Checkbutton(purchase_actions, text='检索说明', variable=show_notes,
+                    command=toggle_notes).pack(side='right', padx=4)
+    ttk.Label(notes, text='前往工程师途中，寻找少绕路的模组／舰载武器售卖点，可筛选已知折扣。',
               wraplength=1280).pack(fill='x', padx=12)
-    ttk.Label(form, text='自动覆盖单跳和多跳；额外跳数相对直达估算。未验证实际航线，排序仅针对已取回的命中。',
+    ttk.Label(notes, text='自动覆盖单跳和多跳；额外跳数相对直达估算。未验证实际航线，排序仅针对已取回的命中。',
               wraplength=1280, style='Muted.TLabel').pack(fill='x', padx=12)
-    ttk.Label(form, text='每项独立选择规格、折扣和新鲜度；到站距离留空不限，不核实购买数量。',
+    ttk.Label(notes, text='每项独立选择规格、折扣和新鲜度；到站距离留空不限，不核实购买数量。',
                style='Muted.TLabel').pack(fill='x', padx=12)
-    ttk.Checkbutton(form, text='按满级个人优惠计算（默认）',
-                    variable=variables['assume_max_rank']).pack(anchor='w', padx=12)
     win.personal_discount_note = ttk.Label(form,
         text='选择效忠 Power 后假设已解锁最高等级奖励，未读取实际等级；仅限本势力领地内适用武器，不与公共优惠相加，航母不计入。',
         wraplength=1250, style='Muted.TLabel')
@@ -191,8 +228,7 @@ def open_window(app):
                                            max_extra_jumps=variables['max_extra_jumps'].get(),
                                            ignore_planetary=variables['ignore_planetary'].get(),
                                            landing_pad=variables['landing_pad'].get(),
-                                           pledged_power=variables['pledged_power'].get(),
-                                           assume_max_rank=variables['assume_max_rank'].get())
+                                            pledged_power=variables['pledged_power'].get())
         want, pages = int(variables['want'].get()), int(variables['max_pages'].get())
         if want < 1 or pages < 1:
             raise ValueError('结果数和页数必须大于零，每页数量必须在 1~500 之间')

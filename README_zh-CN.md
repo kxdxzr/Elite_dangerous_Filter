@@ -1,5 +1,11 @@
 # Elite_dangerous_Filter
 
+**下一版源码新增：**[全配件折扣站查找器](docs/full-outfitting.md)，默认只要求同站全部已知普通／Power配件实际规格齐全，折扣筛选可选，排除航母及要塞航母；可选舰船类别及对应装甲、Guardian科技经纪人。尚未包含在已发布的Beta.2 EXE中。
+
+Merc Coins特殊装备独立可选，默认不要求；创世Jameson Memorial是正向回归基准，不固定展示或强塞进结果。2026-10-20已通过Sol／500 ly／50结果／25页／包含其他公共折扣的完整线上验收，见[验证记录](docs/full-outfitting.md#创世正向回归基准)。
+
+**下一版源码调整：**选择 Power 后，个人适用武器优惠统一按满级假设计算，不再提供勾选框，未读取实际等级；选择“无”仅计算公共优惠。
+
 [English](README.md) · [简体中文](README_zh-CN.md) · [发行版本 / Releases](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
 [详细检索逻辑与工具规则](docs/README_检索逻辑.md)
@@ -125,7 +131,7 @@ python filter_gui.py
 ## 中子星跳跃规划器
 
 **已迁至[独立项目](https://github.com/kxdxzr/Elite_dangerous_Neutron_Planner)。**
-当前筛选器源码不再内置规划器，按钮仅打开新仓库。旧收藏不会删除，可在独立版手动导入
+当前筛选器源码不再内置规划器，也不在界面中放置链接；请使用上方仓库链接。旧收藏不会删除，可在独立版手动导入
 `route_ship_favorites.json`，新工具使用独立数据目录。下述航线功能说明仅适用于已发布的
 v0.1.3／v0.1.4-beta.1 旧 EXE，不代表当前源码仍内置规划器；稀有商品几何顺路筛选仍保留。
 

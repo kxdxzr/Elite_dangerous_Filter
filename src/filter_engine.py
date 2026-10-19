@@ -1082,7 +1082,7 @@ def tighten_distance_payload(kind, payload, conditions, coord_cache, notes):
 
 
 def search(kind, conditions, want=200, max_pages=25, progress=None,
-            corrections=None, stop=None, notes=None, page_size=500, row_filter=None):
+            corrections=None, stop=None, notes=None, page_size=500, row_filter=None, http=None):
     """一次规划 -> 流式分页 -> 去重 -> 精确复核。
     返回 (rows, total_server, scanned)，终止原因记录在 notes。
     count 是后端封顶的候选数，不能据此判断已遍历全库。
@@ -1148,7 +1148,7 @@ def search(kind, conditions, want=200, max_pages=25, progress=None,
         _report(progress, f"正在请求第{page + 1}页 (每页{per}条)，已命中 {len(out)}...",
                 phase="fetch", scanned=scanned, hits=len(out), total=total,
                 page=page, pages=max_pages, per=per, want=want)
-        d = _http_json(f"{SPansh_BASE}/{kind}/search", p)
+        d = (http or _http_json)(f"{SPansh_BASE}/{kind}/search", p)
         if not isinstance(d, dict) or not isinstance(d.get("results"), list):
             raise ValueError(f"服务器响应无效: {str(d)[:300]}")
         if page == 0:

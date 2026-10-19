@@ -1082,8 +1082,8 @@ class App:
         ttk.Button(extra, text="殖民候选星系查找器", command=self.colonisation_window).pack(side="left", padx=4)
         route_bar = ttk.Frame(root, padding=(6, 0, 6, 4))
         route_bar.pack(fill='x')
-        ttk.Button(route_bar, text='中子星规划器（独立项目）', command=self.neutron_planner_project).pack(side='left', padx=4)
         ttk.Button(route_bar, text='工程师途中采购', command=self.engineer_shopping_window).pack(side='left', padx=4)
+        ttk.Button(route_bar, text='全配件折扣站查找器', command=self.full_outfitting_window).pack(side='left', padx=4)
 
         self.hint_var = tk.StringVar(
             value="第三格可下拉/打字联想/点“选值…”多选 (选项≤30个直接下拉)。船/模块名打字联想+自动纠错，行内自带新鲜度选择。")
@@ -1598,13 +1598,13 @@ class App:
 
         threading.Thread(target=work, daemon=True).start()
 
-    def neutron_planner_project(self):
-        import webbrowser
-        return webbrowser.open('https://github.com/kxdxzr/Elite_dangerous_Neutron_Planner')
-
     def rare_goods_window(self):
         from powerplay_gui import open_window
         open_window(self, data_age)
+
+    def full_outfitting_window(self):
+        from full_outfitting_gui import open_window
+        return open_window(self)
 
     def pve_window(self):
         from pve_gui import open_window
@@ -1636,12 +1636,10 @@ class App:
             ttk.Entry(controls, textvariable=variable, width=7).pack(side="left", padx=4)
         options = ttk.Frame(win, padding=(8, 0))
         options.pack(fill="x")
-        minimum = tk.StringVar(value="")
         maximum = tk.StringVar(value="")
         no_permit = tk.BooleanVar(value=True)
-        for label, variable in (("最少航母数", minimum), ("最多航母数", maximum)):
-            ttk.Label(options, text=label).pack(side="left", padx=(8, 0))
-            ttk.Entry(options, textvariable=variable, width=7).pack(side="left", padx=4)
+        ttk.Label(options, text="最多航母数").pack(side="left", padx=(8, 0))
+        ttk.Entry(options, textvariable=maximum, width=7).pack(side="left", padx=4)
         ttk.Label(options, text="留空不限，包含边界").pack(side="left")
         ttk.Checkbutton(options, text="只显示确认免许可的星系", variable=no_permit).pack(side="left", padx=8)
         ttk.Label(win, text="按站点类型统计 Spansh 已收录航母，不是实时数量或车位预测。类型数据不完整显示未知；数量筛选不包含未知结果。",
@@ -1694,14 +1692,13 @@ class App:
         def run():
             try:
                 name, distance, limit = reference.get().strip(), float(radius.get()), int(pages.get())
-                low = int(minimum.get()) if minimum.get().strip() else None
                 high = int(maximum.get()) if maximum.get().strip() else None
                 if not name or not 0 < distance <= 50 or limit < 1:
                     raise ValueError()
-                if any(v is not None and v < 0 for v in (low, high)) or (low is not None and high is not None and low > high):
+                if high is not None and high < 0:
                     raise ValueError()
             except ValueError:
-                messagebox.showwarning("参数错误", "请填参考星系、有效半径和页数；航母数量为非负整数或留空，最少不能大于最多", parent=win)
+                messagebox.showwarning("参数错误", "请填参考星系、有效半径和页数；最多航母数为非负整数或留空", parent=win)
                 return
             exclude = no_permit.get()
             stop.clear()
@@ -1713,7 +1710,7 @@ class App:
             def work():
                 try:
                     info, rows = eng.carrier_parking_search(
-                        name, distance, min_carriers=low, max_carriers=high, exclude_permit=exclude,
+                        name, distance, max_carriers=high, exclude_permit=exclude,
                         max_pages=limit, stop=stop,
                         progress=lambda msg, detail=None: self._post(win, lambda: (status.set(msg), tracker.update(msg, detail))))
 
@@ -1748,7 +1745,7 @@ class App:
         ttk.Button(controls, text="停止", command=stop.set).pack(side="left")
         ttk.Button(controls, text="导出 CSV", command=export_rows).pack(side="left", padx=6)
         self.bind_tool_state("carrier_parking", win, dict(reference=reference, radius=radius,
-                             pages=pages, min_carriers=minimum, max_carriers=maximum, exclude_permit=no_permit))
+                              pages=pages, max_carriers=maximum, exclude_permit=no_permit))
         def close():
             stop.set()
             win.destroy()

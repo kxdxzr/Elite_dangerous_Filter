@@ -13,6 +13,7 @@ def manager(widget):
 
 class TextMixin:
     def __init__(self, master=None, **kw):
+        self._value_labels = kw.pop('value_labels', {})
         self._raw_text = kw.get('text')
         self._raw_values = tuple(kw.get('values', ()))
         self._raw_width = kw.get('width')
@@ -45,7 +46,7 @@ class TextMixin:
         if self._busy or not isinstance(self, base.Combobox):
             return
         value = self._display.get()
-        inverse = {self._manager.tr(v): v for v in self._raw_values}
+        inverse = {self._manager.tr(self._value_labels.get(v, v)): v for v in self._raw_values}
         self._busy = True
         try:
             self._model.set(inverse.get(value, value))
@@ -58,7 +59,7 @@ class TextMixin:
         if self._raw_text is not None:
             super().configure(text=self._manager.tr(self._raw_text))
         if isinstance(self, base.Combobox):
-            values = [self._manager.tr(v) for v in self._raw_values]
+            values = [self._manager.tr(self._value_labels.get(v, v)) for v in self._raw_values]
             super().configure(values=values)
             if self._raw_width is not None:
                 changed = any(str(a) != str(b) for a, b in zip(self._raw_values, values))
@@ -67,7 +68,8 @@ class TextMixin:
         if self._display is not None:
             self._busy = True
             try:
-                self._display.set(self._manager.tr(self._model.get()))
+                value = self._model.get()
+                self._display.set(self._manager.tr(self._value_labels.get(value, value)))
             finally:
                 self._busy = False
 
@@ -82,7 +84,7 @@ class TextMixin:
         if 'values' in kw:
             self._raw_values = tuple(kw['values'])
             if getattr(self, '_manager', None):
-                kw['values'] = [self._manager.tr(v) for v in self._raw_values]
+                kw['values'] = [self._manager.tr(self._value_labels.get(v, v)) for v in self._raw_values]
         result = super().configure(cnf, **kw)
         return result
 
