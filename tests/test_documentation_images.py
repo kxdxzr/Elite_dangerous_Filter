@@ -17,7 +17,7 @@ class DocumentationImageTests(unittest.TestCase):
         for readme, language in (('README.md', 'en'), ('README_zh-CN.md', 'zh')):
             text = (PROJECT / readme).read_text(encoding='utf-8')
             images = re.findall(r'!\[[^\]]*\]\((docs/images/[^)]+)\)', text)
-            self.assertEqual(len(images), 12, readme)
+            self.assertEqual(len(images), 11, readme)
             for path in images:
                 name = Path(path).name
                 self.assertTrue((PROJECT / path).is_file(), path)
@@ -29,7 +29,7 @@ class DocumentationImageTests(unittest.TestCase):
 
     def test_images_match_recorded_dimensions_and_checksums(self):
         manifest = json.loads((PROJECT / 'docs/images/screenshots.json').read_text(encoding='utf-8'))
-        self.assertEqual(len(manifest['screenshots']), 24)
+        self.assertEqual(len(manifest['screenshots']), 22)
         for entry in manifest['screenshots']:
             with self.subTest(image=entry['file']):
                 raw = (PROJECT / 'docs/images' / entry['file']).read_bytes()

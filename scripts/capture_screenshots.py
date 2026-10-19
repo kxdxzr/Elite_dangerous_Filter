@@ -41,23 +41,12 @@ def main():
         stack.enter_context(patch.dict(os.environ, ELITE_FILTER_DATA_DIR=folder))
         import filter_gui as gui
         import field_options as fo
-        import route_ship
-        import route_tool
         import engineer_shopping as shopping
         from export_metadata import PROJECT_VERSION
         stack.enter_context(patch.object(fo, 'prefetch_common', lambda *a, **k: None))
         stack.enter_context(patch.object(fo, 'get_options', lambda kind, field: list(fo.BUNDLED_OPTIONS.get(f'{kind}/{field}', []))))
         stack.enter_context(patch.object(gui.App, 'restore_session', lambda *a: None))
         stack.enter_context(patch('urllib.request.urlopen', side_effect=RuntimeError('Screenshot capture is offline.')))
-        build = dict(header=dict(appName='EDSY'), data=dict(
-            Ship='asp', ShipName='Example Explorer', UnladenMass=280,
-            FuelCapacity=dict(Main=32, Reserve=.63), Modules=[
-                dict(Slot='FrameShiftDrive', Item='Int_Hyperdrive_Size5_Class5'),
-                dict(Slot='Slot1', Item='int_guardianfsdbooster_size5')]))
-        stack.enter_context(patch.object(route_tool.Favorites, 'load', return_value={'Example Explorer': json.dumps(build)}))
-        stack.enter_context(patch.object(route_ship, 'catalog', return_value=[dict(
-            symbol='Int_Hyperdrive_Size5_Class5', **{'class': 5}, rating='A',
-            optmass=1050, maxfuel=5, fuelmul=.012, fuelpower=2.45)]))
         root = gui.tk.Tk()
         root.withdraw()
         errors = []
@@ -228,23 +217,7 @@ def main():
                 colony.result_tree.insert('', 'end', values=[data.get(key, '') for key in colony.result_tree['columns']])
             colony.result_tree.sort_by('near_distance')
 
-            route = app.route_window()
-            route.route_variables['source'].set('Demo Origin')
-            route.route_variables['destination'].set('Demo Destination')
-            route.route_state['points'][:] = ['Demo Waypoint']
-            points_tree = next(t for t in trees(route) if tuple(t['columns']) == ('order', 'name'))
-            points_tree.insert('', 'end', values=('1', 'Demo Waypoint'))
-            route.route_state['info'] = dict(complete=True, planned_segments=2, failed_segment=None,
-                reason='航线规划完成', segments=[dict(number=1), dict(number=2)], rows=[
-                    dict(name=name, segment=1 if i < 3 else 2, distance=distance, distance_to_destination=remaining,
-                         fuel_in_tank=32 - i, fuel_used=0 if i == 0 else 1, must_refuel=False,
-                         has_neutron=i == 1, must_inject=False, waypoint=i == 2,
-                         full_tank_start=i in (0, 2), departure_segment=2 if i == 2 else '', departure_fuel=32 if i in (0, 2) else '')
-                    for i, (name, distance, remaining) in enumerate((
-                        ('Demo Origin', 0, 70), ('Demo Neutron', 35, 35), ('Demo Waypoint', 35, 0),
-                        ('Demo Transit', 34, 36), ('Demo Destination', 36, 0)))])
-
-            windows = [root, rare, pve, carrier, midpoint, colony, route, engineer]
+            windows = [root, rare, pve, carrier, midpoint, colony, engineer]
             for win in windows[1:]:
                 win.withdraw()
             for language in ('zh', 'en'):
@@ -264,7 +237,6 @@ def main():
                 capture(colony, f'colonisation-finder{suffix}.png', language, width=1700, height=930)
                 colony.result_tree.xview_moveto(1)
                 capture(colony, f'colonisation-finder-details{suffix}.png', language, width=1700, height=930)
-                capture(route, f'neutron-route-planner{suffix}.png', language, width=1600, height=940)
                 engineer.result_tree.xview_moveto(0)
                 engineer.result_tree.sort_by(f'value_{len(engineer.result_tree["columns"]) - 2}')
                 capture(engineer, f'engineer-shopping{suffix}.png', language, width=1600, height=930)

@@ -219,31 +219,17 @@ class AppearanceGuiTests(unittest.TestCase):
     def test_all_tools_open_in_current_theme_and_follow_switches(self):
         self.app.set_appearance('dark')
         for method in ('rare_goods_window', 'pve_window', 'colonisation_window',
-                       'carrier_parking_window', 'midpoint_window', 'route_window',
+                       'carrier_parking_window', 'midpoint_window',
                        'engineer_shopping_window'):
             getattr(self.app, method)()
         windows = [child for child in self.root.winfo_children() if isinstance(child, gui.tk.Toplevel)]
-        self.assertGreaterEqual(len(windows), 7)
+        self.assertGreaterEqual(len(windows), 6)
         self.root.update_idletasks()
         for mode in ('dark', 'light'):
             self.app.set_appearance(mode)
             for window in windows:
                 self.assertEqual(window.cget('background'), appearance.PALETTES[mode]['bg'])
         self.assertEqual(session_store.load(self.session), {})
-
-    def test_route_form_scrolls_without_hiding_results_at_smaller_sizes(self):
-        window = self.app.route_window()
-        for size in ('1400x850', '1100x700'):
-            window.geometry(size)
-            window.deiconify()
-            self.root.update()
-            self.assertTrue(window.result_tree.winfo_ismapped())
-            self.assertGreater(window.result_tree.winfo_height(), 100)
-            canvas = window.settings_canvas
-            canvas.yview_moveto(1)
-            self.assertGreater(canvas.yview()[0], 0)
-            self.assertFalse(window.waypoint_tree._sortable)
-            canvas.yview_moveto(0)
 
     def test_copy_and_export_footers_remain_visible(self):
         self.root.deiconify()

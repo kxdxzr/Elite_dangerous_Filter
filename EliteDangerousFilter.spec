@@ -10,7 +10,7 @@ a = Analysis(
     hiddenimports=["powerplay_gui", "powerplay_tool", "rare_goods", "exe_smoke_test", "exe_session_test",
                    "pve_gui", "pve_tool", "pve_access", "pve_cache", "faction_options", "i18n", "localized_tk",
                    "colonisation_gui", "colonisation_tool", "main_system_gui", "system_filters", "system_filter_fields",
-                    "route_gui", "route_tool", "route_ship", "rare_neutron", "result_copy", "result_format", "search_progress", "export_metadata",
+                     "rare_neutron", "result_copy", "result_format", "search_progress", "export_metadata",
                     "engineer_shopping_gui", "engineer_shopping"],
     hookspath=[],
     hooksconfig={},

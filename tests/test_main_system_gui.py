@@ -196,17 +196,14 @@ class MainSystemGuiTests(unittest.TestCase):
         for widget, _, expected in checks:
             self.assertEqual(widget.cget('text'), expected)
 
-    def test_all_result_windows_have_sortable_headers_but_waypoint_editor_does_not(self):
-        import route_tool
-        with patch.object(self.gui.fo, 'get_options', return_value=[]), \
-                patch.object(route_tool.Favorites, 'load', return_value={}):
+    def test_all_result_windows_have_sortable_headers(self):
+        with patch.object(self.gui.fo, 'get_options', return_value=[]):
             self.app.midpoint_window()
             self.app.carrier_parking_window()
             self.app.rare_goods_window()
             self.app.pve_window()
             self.app.colonisation_window()
             self.app.engineer_shopping_window()
-            self.app.route_window()
         trees = []
         def scan(parent):
             for child in parent.winfo_children():
@@ -214,10 +211,9 @@ class MainSystemGuiTests(unittest.TestCase):
                     trees.append(child)
                 scan(child)
         scan(self.root)
-        self.assertGreaterEqual(len(trees), 10)
+        self.assertGreaterEqual(len(trees), 8)
         editors = [tree for tree in trees if not tree._sortable]
-        self.assertEqual(len(editors), 1)
-        self.assertEqual(tuple(editors[0]['columns']), ('order', 'name'))
+        self.assertEqual(len(editors), 0)
         for tree in trees:
             for column in tree['columns']:
                 command = tree.heading(column, 'command')

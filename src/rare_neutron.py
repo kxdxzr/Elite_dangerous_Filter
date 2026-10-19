@@ -3,7 +3,12 @@ import math
 
 import filter_engine as eng
 import pve_cache
-from route_tool import check_stop
+
+
+def check_stop(stop):
+    if stop is not None and stop.is_set():
+        raise InterruptedError('Neutron candidate search cancelled.')
+
 
 OUTBOUND_RANGE = 40
 RETURN_RANGE = 50

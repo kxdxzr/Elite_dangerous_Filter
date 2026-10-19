@@ -44,7 +44,6 @@ def run(gui, report_path):
         pve = app.pve_window()
         assert pve.title() == "海盗任务查找器"
         colony = app.colonisation_window()
-        route = app.route_window()
         shopping = app.engineer_shopping_window()
         app.set_appearance('dark')
         root.update_idletasks()
@@ -82,8 +81,8 @@ def run(gui, report_path):
         app.tree.sort_by('value_2')
         assert app.tree.set(app.tree.get_children()[0], 'name') == 'Shop 2'
         assert app.results[0]['name'] == 'Shop 10'
-        assert route.title() == '中子星跳跃规划器'
-        assert route.route_state['points'] == []
+        assert not hasattr(app, 'route_window')
+        assert button(root, '中子星规划器（独立项目）') is not None
         assert 'population' not in colony.result_tree['columns']
         assert all(key in colony.result_tree['columns'] for key in ('scan1', 'scan2', 'scan3', 'neighbour_pad'))
         assert 'max_pages' not in colony.session_variables
@@ -96,7 +95,6 @@ def run(gui, report_path):
         assert colony.criteria().body_groups[0][0]['field'] == '_is_binary'
         app.set_language("en")
         assert shopping.title() == 'Engineer trip shopping'
-        assert route.title() == 'Neutron jump planner'
         assert colony.title() == "Colonisation candidate finder"
         assert button(colony, '查询').cget('text') == 'Search'
         assert button(shopping, '查询').cget('text') == 'Search'

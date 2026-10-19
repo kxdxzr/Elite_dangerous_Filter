@@ -2,6 +2,7 @@
 import re
 
 CATALOG = {
+    '中子星规划器（独立项目）': 'Neutron planner (separate project)',
     '外观': 'Appearance', '跟随系统': 'Follow system', '浅色': 'Light', '深色': 'Dark',
     '星系、空间站与顺路工具': 'Systems, stations and tools for your journey',
     '查询': 'Search', '复制站名': 'Copy station name', '关闭': 'Close',

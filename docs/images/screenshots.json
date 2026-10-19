@@ -68,14 +68,6 @@
       "sha256": "fa569c64e3c982f84eea355aad3b7dd4e7b1ddea503d807adc05ad4f09463508"
     },
     {
-      "file": "neutron-route-planner.png",
-      "language": "zh",
-      "title": "中子星跳跃规划器",
-      "width": 1600,
-      "height": 940,
-      "sha256": "b67d42d47e736f56e39470d134d7ced0bdd94a4dc8ddb6c94bd3aae6fb30e152"
-    },
-    {
       "file": "engineer-shopping.png",
       "language": "zh",
       "title": "工程师途中采购",
@@ -154,14 +146,6 @@
       "width": 1700,
       "height": 930,
       "sha256": "6443239732d14a5cba7519859e2c96fa7e2be48dc5df13d526a2c5c0a1431b88"
-    },
-    {
-      "file": "neutron-route-planner-en.png",
-      "language": "en",
-      "title": "Neutron jump planner",
-      "width": 1600,
-      "height": 940,
-      "sha256": "c5c19e9debbed2b1d0b7206a21cc58a2a811c0794101e94a5b03e750728ef29d"
     },
     {
       "file": "engineer-shopping-en.png",

@@ -1,5 +1,11 @@
 # Neutron jump planner / 中子星跳跃规划器
 
+**Moved / 已拆分：** the ship-specific planner now lives in
+[Elite_dangerous_Neutron_Planner](https://github.com/kxdxzr/Elite_dangerous_Neutron_Planner).
+The planning sections below are historical notes for older published filter EXEs;
+the rare-goods destination-filter sections still apply to the filter's current source.
+按配船的中子规划器已迁出；下文航线部分为旧版历史说明，稀有商品几何筛选部分仍适用当前源码。
+
 ## English
 
 Included in the downloadable v0.1.3 Windows EXE.

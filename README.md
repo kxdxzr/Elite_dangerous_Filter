@@ -6,10 +6,14 @@
 
 An Elite Dangerous system and station filtering desktop tool powered by [Spansh](https://spansh.co.uk/), built with Python / tkinter and an instantly switchable Chinese / English UI.
 
-**Seven built-in tools in one Windows EXE — no Python installation and no API key required:**
+**System/station search tools in one Windows EXE — no Python installation and no API key required:**
+
+**Neutron planner moved:** current source has extracted it into
+[Elite_dangerous_Neutron_Planner](https://github.com/kxdxzr/Elite_dangerous_Neutron_Planner),
+with independent settings, application and build. This project retains only a link.
+Previously published v0.1.3 / v0.1.4-beta.1 EXEs still include the older planner.
 
 - **General filter:** freely combinable system/station conditions (AND between rows, OR within one multi-select row), distance intersections/outside ranges, module class/rating matching, shipyard/outfitting freshness and colonisation-candidate conditions — complex queries Spansh's own form cannot express.
-- **Neutron jump planner:** ship-specific fuel and refuelling planning from an imported Coriolis JSON / EDSY SLEF build, with ordered waypoints.
 - **Engineer trip shopping:** one station stocking a complete, independently specified shopping list on the way to one of 25 ship engineers.
 - **Rare goods target finder:** 142 sources across 138 systems, with optional experimental neutron-alignment ranking.
 - **Plus** pirate massacre candidates (testing), carrier parking and system midpoint finders.
@@ -116,7 +120,13 @@ The rare-goods detail table and CSV omit the redundant **Range** column. The 100
 
 **Further improvements included in v0.1.3:** colonisation columns/CSV start with candidate name → top-three scan-value planets → nearest populated system → nearest distance → maximum pad → other information. Copy buttons cover relevant result names/systems/stations across the main and tool windows. Absent selection or empty fields show a prompt without clearing the clipboard. Double-click shortcuts remain available.
 
-## Neutron jump planner (included in v0.1.3)
+## Neutron jump planner
+
+**Moved to [a separate project](https://github.com/kxdxzr/Elite_dangerous_Neutron_Planner).**
+The current filter source no longer includes the planner; its button opens the new repository.
+Old favourites are not deleted: import `route_ship_favorites.json` explicitly in the standalone tool,
+which uses a separate data directory. The planning instructions below describe the older published
+v0.1.3 / v0.1.4-beta.1 EXEs, not current source. Rare-goods geometric alignment remains in this filter.
 
 Rare-goods filtering is **experimental**: a single search reuses scanned candidates and progressively relaxes alignment per Power (30°/10% detour → 45°/25% → 60°/50%), stopping at that Power's first geometric matching tier. Projection must remain within the trip. The 40/50 ly model is only an internal hint/tie-breaker, never an exclusion rule: zero estimated savings or unavailable hints do not remove aligned candidates. It displays tier, reference neutron stars, angle and detour; no jump-count or landing-system columns, and no guaranteed savings or full Power coverage.
 
@@ -245,12 +255,6 @@ Independent regional/nearest-populated distance filters, planet groups, top scan
 ![Colonisation result details in English](docs/images/colonisation-finder-details-en.png)
 
 </details>
-
-### Neutron jump planner
-
-Saved example ship build, theoretical range preview, ordered waypoint, route options and per-leg results. The displayed route is illustrative, not an actual plotted journey.
-
-![Neutron jump planner in English](docs/images/neutron-route-planner-en.png)
 
 ### Engineer trip shopping
 

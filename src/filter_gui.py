@@ -1073,7 +1073,7 @@ class App:
         ttk.Button(extra, text="殖民候选星系查找器", command=self.colonisation_window).pack(side="left", padx=4)
         route_bar = ttk.Frame(root, padding=(6, 0, 6, 4))
         route_bar.pack(fill='x')
-        ttk.Button(route_bar, text='中子星跳跃规划器', command=self.route_window).pack(side='left', padx=4)
+        ttk.Button(route_bar, text='中子星规划器（独立项目）', command=self.neutron_planner_project).pack(side='left', padx=4)
         ttk.Button(route_bar, text='工程师途中采购', command=self.engineer_shopping_window).pack(side='left', padx=4)
 
         self.hint_var = tk.StringVar(
@@ -1589,9 +1589,9 @@ class App:
 
         threading.Thread(target=work, daemon=True).start()
 
-    def route_window(self):
-        from route_gui import open_window
-        return open_window(self)
+    def neutron_planner_project(self):
+        import webbrowser
+        return webbrowser.open('https://github.com/kxdxzr/Elite_dangerous_Neutron_Planner')
 
     def rare_goods_window(self):
         from powerplay_gui import open_window
