@@ -84,6 +84,55 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         restored = self.app.engineer_shopping_window()
         self.assertEqual(restored.session_variables['destination'].get(), '')
 
+    def test_pad_selector_is_localized_readonly_and_survives_reopen(self):
+        win = self.app.engineer_shopping_window()
+        self.populate(win)
+        self.assertEqual(str(win.landing_pad_box['state']), 'readonly')
+        self.assertEqual(tuple(win.landing_pad_box['values']), ('不限', 'S', 'M', 'L'))
+        self.assertEqual(win.criteria()[0].landing_pad, '')
+        win.session_variables['landing_pad'].set('M')
+        before = win.criteria()
+        self.app.set_language('en')
+        self.assertEqual(tuple(win.landing_pad_box['values']), ('Any', 'S', 'M', 'L'))
+        self.assertEqual(win.landing_pad_box.get(), 'M')
+        self.assertEqual(win.criteria(), before)
+        self.app._tool_states['engineer_shopping'] = self.app._state_dict()['tools']['engineer_shopping']
+        win.destroy()
+        restored = self.app.engineer_shopping_window()
+        self.assertEqual(restored.session_variables['landing_pad'].get(), 'M')
+        self.assertEqual(restored.criteria(), before)
+
+    def test_old_or_invalid_saved_pad_defaults_to_any(self):
+        for state in ({}, {'landing_pad': 'XL'}, {'landing_pad': ''}):
+            self.app._tool_states['engineer_shopping'] = state
+            win = self.app.engineer_shopping_window()
+            self.assertEqual(win.session_variables['landing_pad'].get(), '不限')
+            win.destroy()
+
+    def test_pledged_power_defaults_max_rank_and_survives_language_and_reopen(self):
+        win = self.app.engineer_shopping_window()
+        self.populate(win)
+        self.assertEqual(win.session_variables['pledged_power'].get(), '无')
+        self.assertTrue(win.session_variables['assume_max_rank'].get())
+        self.app.set_language('en')
+        self.assertEqual(win.pledged_power_box._display.get(), 'None')
+        self.app.set_language('zh')
+        self.assertEqual(str(win.pledged_power_box['state']), 'readonly')
+        win.session_variables['pledged_power'].set('Jerome Archer')
+        criteria = win.criteria()[0]
+        self.assertEqual(criteria.pledged_power, 'Jerome Archer')
+        self.assertEqual(criteria.conditions[0]['personal_power'], 'Jerome Archer')
+        self.app.set_language('en')
+        self.assertIn('maximum-rank', win.personal_discount_note.cget('text'))
+        self.assertEqual(win.criteria()[0], criteria)
+        win.session_variables['assume_max_rank'].set(False)
+        self.assertNotIn('personal_power', win.criteria()[0].conditions[0])
+        self.app._tool_states['engineer_shopping'] = self.app._state_dict()['tools']['engineer_shopping']
+        win.destroy()
+        restored = self.app.engineer_shopping_window()
+        self.assertEqual(restored.session_variables['pledged_power'].get(), 'Jerome Archer')
+        self.assertFalse(restored.session_variables['assume_max_rank'].get())
+
     def test_single_spec_selector_and_saved_raw_spec_draft(self):
         win = self.app.engineer_shopping_window()
         self.populate(win)
@@ -110,18 +159,20 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         import engineer_shopping_gui as ui
         win = self.app.engineer_shopping_window()
         self.populate(win)
+        win.session_variables['landing_pad'].set('L')
         win.add_purchase(dict(value='Plasma Accelerator', module_spec='2C', discount='是'))
         conditions = win.criteria()[0].conditions
         conditions += [dict(type='distance', ref_system=ref, min_ly=None, max_ly=1000, mode='inside')
                        for ref in ('LHS 336', 'Leesti')]
         result = dict(rows=[dict(name='Shop', system_name='Shopping', type='Coriolis Starport',
-                                distance_to_arrival=1234.56, _distances={'Leesti': 40, 'LHS 336': 60},
+                                 distance_to_arrival=1234.56, has_large_pad=True,
+                                 _distances={'Leesti': 40, 'LHS 336': 60},
                                 _shopping_route=dict(direct_jumps=2, origin_jumps=1, destination_jumps=1,
                                                      total_jumps=2, extra_jumps=0, detour_ly=0),
                                 system_controlling_power='Li Yong-Rui', system_power_state='Fortified',
                                 modules=[dict(name='Shield Booster', **{'class': 0, 'rating': 'A'}),
                                          dict(name='Plasma Accelerator', **{'class': 2, 'rating': 'C'})])],
-                      conditions=conditions, scanned=10, total=10, notes=['候选分页已取完'], stopped=False)
+                      conditions=conditions, landing_pad='L', scanned=10, total=10, notes=['候选分页已取完'], stopped=False)
         with patch.object(tool, 'search', return_value=result) as search:
             win.run_search()
             deadline = time.monotonic() + 3
@@ -138,12 +189,15 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         win.session_variables['origin'].set('Edited')
         win.session_variables['max_extra_jumps'].set('99')
         win.session_variables['ignore_carriers'].set(False)
+        win.session_variables['landing_pad'].set('S')
         self.app.set_language('en')
         headers = [tree.heading(key, 'text') for key in tree['columns']]
         self.assertIn('Arrival distance ls', headers)
         self.assertIn('Distance to Leesti (ly)', headers)
         self.assertIn('Estimated extra jumps', headers)
         self.assertIn('Matched modules (2)', headers)
+        self.assertIn('Confirmed landing pad', headers)
+        self.assertEqual(win.search_state['result']['landing_pad'], 'L')
         self.assertNotIn('Distance to Edited (ly)', headers)
         output = mock_open()
         with patch.object(ui.filedialog, 'asksaveasfilename', return_value='shopping.csv'), \

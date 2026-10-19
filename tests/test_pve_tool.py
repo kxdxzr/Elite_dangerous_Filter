@@ -40,6 +40,7 @@ DETAILS = {
 
 
 def run(criteria=None, *rows, loader=None, **kw):
+    kw.setdefault('ring_loader', lambda names: {})
     return pve.search(criteria or pve.Criteria(), page=page(*rows),
         details_loader=loader or (lambda name: copy.deepcopy(DETAILS[name])),
         resolver=lambda name: (name, (0, 0, 0), False), **kw)
@@ -178,6 +179,27 @@ class PveParserTests(unittest.TestCase):
 
 
 class PveSearchTests(unittest.TestCase):
+    def test_confirmed_ring_free_overrides_stale_res_records(self):
+        for sites in ((), ('low',), ('haz', 'high', 'reg', 'low')):
+            with self.subTest(sites=sites):
+                info, rows = run(None, candidate(sites=sites, rings=0))
+                self.assertEqual(rows, [])
+                self.assertTrue(info['complete'])
+                self.assertEqual(info['confirmed_res'], 0)
+                self.assertEqual(info['diagnostics']['no_site'], 1)
+
+    def test_ring_free_res_record_does_not_block_independent_cnb_fallback(self):
+        info, rows = run(None, candidate(sites=('low',), rings=0),
+                         candidate('Beta', sites=('high',), cnb=True))
+        self.assertEqual(info['mode'], 'CNB')
+        self.assertEqual([row['source'] for row in rows], ['Beta'])
+        self.assertEqual(rows[0]['site'], 'CNB')
+        self.assertEqual(run(pve.Criteria(cnb_fallback=False), candidate(cnb=True))[1], [])
+
+    def test_missing_ring_count_is_not_evidence_of_ring_free_system(self):
+        self.assertEqual(run(None, candidate(rings=None))[1][0]['site'], 'RES Low')
+        self.assertEqual(run(None, candidate(sites=(), rings=None))[1][0]['site'], '情况未知')
+
     def test_validation_zero_requests(self):
         resolver = Mock()
         for args in ({'radius': -1}, {'radius': float('nan')}, {'radius': float('inf')}, {'radius': True},

@@ -18,7 +18,8 @@ TOOLS = {
     "carrier_parking": dict(reference="Lave", radius="45", pages="7",
                             min_carriers="0", max_carriers="17", exclude_permit=False),
     "midpoint": dict(a="Sol", b="Ngurii", want="15", populated_only=True, exclude_permit=True),
-    "pve": dict(reference="Sol", radius="0", min_factions="8", min_federation="2", min_empire="1",
+    "pve": dict(reference="Sol", radius="0", min_factions="0", min_federation="2", min_empire="1",
+                 site_type='仅 Low RES',
                 source_faction="Mother Gaia", source_controller="Mother Gaia", target_controller="Test Pirates",
                 power="Yuri Grom", power_scope="双方", prefer_low=True, cnb_fallback=False,
                 source_pad="L", source_station_max_ls="500", target_ring_max_ls="1500"),
@@ -32,6 +33,8 @@ SHOPPING_ROWS = [
             'module_slot': '武器挂点', 'condition_category': '不限', 'module_spec': '2C'}),
 ]
 TOOLS['engineer_shopping'] = dict(
+    pledged_power='Jerome Archer', assume_max_rank=True,
+    landing_pad='L',
     origin='LHS 336', destination='Didi Vatermann — Leesti', jump_range='90', max_extra_jumps='2',
     arrival_ls='1200', want='20', max_pages='5', ignore_carriers=True, ignore_planetary=True,
     purchases=json.dumps(SHOPPING_ROWS, ensure_ascii=False), module='Shield Booster', module_class='0',

@@ -1,5 +1,9 @@
 # Engineer trip shopping / 工程师途中采购
 
+**Release status / 发布状态：** all source additions described below are included in
+[v0.1.4-beta.2](releases/v0.1.4-beta.2.md). References to “not in beta.1” distinguish the older EXE.
+下述源码新增功能已包含在beta.2；“未包含在beta.1”仅用于区分旧EXE。
+
 ## 功能描述
 
 根据出发星系、目标工程师和自定单跳航程，寻找途中可在同一站购齐模组／舰载武器清单的售卖点。每项独立设置规格、折扣和数据新鲜度，可忽略航母／地面采购站，并限制到站距离和最多额外估算跳数。支持多跳行程，优先展示额外估算跳数少、绕行距离短的结果。跳数仅按距离估算，不代表已验证的实际航线；不核查商品购买数量。
@@ -13,10 +17,11 @@
 - 最多额外跳数为非负整数，默认1；无需选择单跳或多跳模式。0表示估算总跳数不增加，并不代表完全不绕路。
 - 点击“添加采购项”建立清单，各项支持独立的槽位分类、名称、单栏规格（如2C、5A或不限）、折扣和数据新鲜度，可单独删除。规格下拉只提供已确认组合，未收录规格可手填查询。**同一站必须满足全部采购项**；一行多选名称也会展开为全部必需商品，沿用该行规格／折扣／新鲜度。不同规格请分项添加，同一名称的不同规格可重复添加。普通主窗口的“属于其一”仍保持OR语义，不受此工具影响。
 - 每项逐件复核名称、规格、折扣及新鲜度，缺少任何一项的站点不命中；这些不完整站点不占用“最多结果”名额。仅判断商品条目是否存在，不验证库存数量，不规划分多站凑单，也不会推断工程师是否能改造所选商品。旧条件的多值／部分规格筛选仍保留原义并以摘要显示。
-- 折扣为“不限／是”，按[已知公共规则](station-discounts.md)判断，不计算个人等级／效忠优惠。默认要求折扣。
+- 折扣为“不限／是”，按[已知规则与例外](station-discounts.md)判断，默认要求折扣。当前源码另支持“效忠 Power（个人优惠）”，默认“无”；选择后默认勾选“按满级个人优惠计算”，不读取实际等级。Arissa／Archer／Yuri Grom 的适用武器按最高30%，Denton 按最高40%；仅在所选势力实际控制的 Exploited／Fortified／Stronghold 星系适用，不推定航母优惠、不与公共优惠相加，展示最强单项优惠。可取消勾选，仅计算公共优惠；选择及开关随会话保存。Archer 个人优惠不受其公共折扣 Bug 排除策略影响，但仍须游戏内核实。结果来源明确标注满级假设，并保留查询时设置，修改表单不会改写旧结果。本功能尚未包含在已发布的 v0.1.4-beta.1 EXE 中。
 - “忽略航母”默认勾选。取消仅允许航母参与，仍须满足其他条件；不会为航母库存推定站点／势力优惠。
 - “忽略地面站”默认不勾选，可独立启用并随会话保存。启用后采购点必须明确标记为非地面站；类型数据未知的不当作太空站。只约束采购站，不影响地面工程师目的地。
 - 到站距离单位为`ls`，严格小于填写值，留空不限；默认1500 ls。
+- **当前源码新增，尚未包含在已发布的 v0.1.4-beta.1 EXE 中：**采购站停机坪可选“不限／S／M／L”，按可停靠船型筛选，默认不限；S接受S／M／L，M接受M／L，L只接受L。由同一座满足完整采购清单的站点提供停机坪证据；未知数据在启用筛选时不命中，也不占用结果名额。只约束采购站，不判断工程师基地的停靠资格。选择随会话保存，旧会话默认不限；结果／CSV新增“已确认停机坪”列，显示已确认存在的最大尺寸，不代表未知的更大型坪必定不存在。
 - 结果与CSV共用独立列：站名、星系、命中商品及规格、折扣幅度与来源（要求折扣时）、两端距离、到站距离（设限时）、直达估算跳数、到采购点估算跳数、到工程师估算跳数、经采购点估算总跳数、额外估算跳数、绕行距离`ly`。
 - 完整采购清单、每项未完成草稿及行程参数随会话保存；旧版单项采购参数自动作为首项恢复。修改／增删表单不会改变上次搜索结果及其CSV的含义。结果和CSV按采购项编号分别展开命中名称、规格和折扣来源等列。
 
@@ -40,6 +45,10 @@
 **这不是实际路线规划器。** 不枚举中转星、不验证燃油／载重／恒星分布／禁行区域，也不判断工程师解锁资格和许可。计算结果是距离下界意义上的跳数估算；即使显示“额外0跳”，实际路线也可能增加跳数或不可达。库存及折扣依据第三方记录和已知规则，最终以游戏内为准。
 
 ## English
+
+**Current source only:** **Pledged Power (personal bonus)** defaults to None. Once a Power is selected, **Assume maximum-rank personal bonus** is enabled by default: eligible weapon discounts are 30% for Arissa / Archer / Yuri Grom, 40% for Denton. Actual rank is not read. Requires the selected Power's actual control and Exploited / Fortified / Stronghold state; carriers are excluded. No stacking with public discounts: show the strongest single rule. Uncheck to use public discounts only. Both settings persist across sessions. Archer's personal bonus is separate from the disabled public discount and still requires in-game verification. Result sources explicitly label the max-rank assumption; results retain their original settings when the form changes. Not in the published v0.1.4-beta.1 EXE.
+
+**Current source only; not in the published v0.1.4-beta.1 EXE:** **Shopping pad (ship size)** offers **Any / S / M / L**, default Any. S accepts S/M/L pads, M accepts M/L, and L requires L. The same station must satisfy the full shopping list and the pad requirement. Unknown pad evidence is rejected when filtering and does not consume the result cap. This does not check engineer-base access. The choice survives sessions; older sessions default to Any. Results/CSV include **Confirmed landing pad**, the largest positively evidenced size, not proof that an unknown larger pad is absent.
 
 **Ignore planetary stations** is an independent checkbox, disabled by default and saved in sessions. When enabled, shopping stations must explicitly be non-planetary; unknown flags are not treated as space stations. This does not exclude planetary engineer destinations.
 

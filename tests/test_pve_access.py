@@ -18,6 +18,47 @@ def station(name='Port', size='L', distance=100, **kw):
 
 
 class AccessTests(unittest.TestCase):
+    def test_unknown_sites_checked_without_distance_limit_and_ring_free_allows_cnb(self):
+        rings = Mock(return_value={'target': dict(seen=True, uncertain=False, has_rings=False,
+                                                distance=None, body='')})
+        info, rows = run(None, candidate(sites=(), rings=None),
+                         candidate('Beta', target='CNB Target', sites=(), cnb=True), ring_loader=rings)
+        rings.assert_called_once_with(['Target'])
+        self.assertEqual(info['mode'], 'CNB')
+        self.assertEqual([row['target'] for row in rows], ['CNB Target'])
+        self.assertEqual(info['diagnostics']['target_no_rings'], 1)
+        self.assertEqual(info['diagnostics']['unknown_sites'], 0)
+
+    def test_unknown_site_with_rings_but_unknown_distance_is_inferred_not_low(self):
+        info, rows = run(None, candidate(sites=(), rings=None), ring_loader=lambda names: {
+            'target': dict(seen=True, uncertain=True, has_rings=True, distance=None, body='')})
+        self.assertEqual(rows[0]['site'], 'RES（星环推定）')
+        self.assertIn('Spansh: rings found', rows[0]['site_record'])
+        self.assertEqual(info['inferred_res'], 1)
+
+    def test_failed_or_incomplete_ring_lookup_preserves_unknown_and_blocks_cnb(self):
+        for loader in (Mock(side_effect=ValueError('offline')), lambda names: {},
+                       lambda names: {'target': dict(seen=False, uncertain=False, has_rings=False)},
+                       lambda names: {'target': dict(seen=True, uncertain=True, has_rings=False)}):
+            info, rows = run(None, candidate(sites=(), rings=None),
+                             candidate('Beta', sites=(), cnb=True), ring_loader=loader)
+            self.assertEqual([row['site'] for row in rows], ['情况未知'])
+            self.assertEqual(info['mode'], 'Unknown')
+
+    def test_body_ring_presence_does_not_require_known_arrival_distance(self):
+        response = {'results': [dict(system_name='Target', name='Ringed', rings=[{}])]}
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.object(pve_cache, 'data_file', side_effect=lambda name: Path(folder) / name), \
+                patch.object(access.eng, '_http_json', return_value=response):
+            pve_cache.clear_memory()
+            try:
+                record = access.ring_distances(['Target'])['target']
+                self.assertTrue(record['has_rings'])
+                self.assertTrue(record['uncertain'])
+                self.assertIsNone(record['distance'])
+            finally:
+                pve_cache.clear_memory()
+
     def test_station_constraints_must_match_same_station(self):
         data = {'stations': [station('Far Large', 'L', 1000), station('Near Medium', 'M', 50)]}
         self.assertIsNone(access.station_match(data, 'L', 100))

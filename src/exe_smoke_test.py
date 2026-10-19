@@ -42,9 +42,15 @@ def run(gui, report_path):
         app.carrier_parking_window()
         app.midpoint_window()
         pve = app.pve_window()
+        assert 'site_type' in pve.session_variables
+        assert tuple(pve.control_widgets['min_factions']['values']) == tuple(str(n) for n in range(9))
         assert pve.title() == "海盗任务查找器"
         colony = app.colonisation_window()
         shopping = app.engineer_shopping_window()
+        assert shopping.session_variables['assume_max_rank'].get() is True
+        assert 'Jerome Archer' in tuple(shopping.pledged_power_box['values'])
+        assert 'landing_pad' in shopping.session_variables
+        assert tuple(shopping.landing_pad_box['values']) == ('不限', 'S', 'M', 'L')
         app.set_appearance('dark')
         root.update_idletasks()
         assert shopping.cget('background') == app.appearance_manager.palette['bg']
@@ -120,12 +126,18 @@ def run(gui, report_path):
         assert len(rare_goods.SOURCE_SYSTEMS) == 138
         assert len(fo.BUNDLED_OPTIONS["stations/modules"]) == 153
         from export_metadata import PROJECT_VERSION
+        from ui_display import process_dpi_awareness
+        awareness = process_dpi_awareness()
+        if sys.platform == 'win32' and awareness is not None:
+            assert awareness in (1, 2), 'GUI process is DPI-unaware; text may be bitmap-scaled'
         assert PROJECT_VERSION in root.title()
         if getattr(sys, 'frozen', False):
             from pathlib import Path
             licence = Path(sys._MEIPASS) / 'LICENSE'
             assert 'GNU GENERAL PUBLIC LICENSE' in licence.read_text(encoding='utf-8')
         report.update(ok=True, version=PROJECT_VERSION, shopping_items=len(shopping.purchase_rows),
+                      display=dict(dpi_awareness=awareness, pixels_per_inch=round(root.winfo_fpixels('1i'), 2),
+                                   ui_font_family=root.tk.call('font', 'actual', 'TkDefaultFont', '-family')),
                       appearance_modes=['system', 'light', 'dark'],
                       sortable_results=True, paired_specs=len(fo.BUNDLED_MODULE_PAIRS),
                       data_directory=data_directory(), session_file=gui.SESSION_FILE,

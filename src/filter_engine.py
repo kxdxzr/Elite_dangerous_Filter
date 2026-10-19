@@ -393,6 +393,11 @@ def normalize_conditions(kind, conditions):
                     raise ValueError('折扣仅支持出售舰船／模组的属于其一、等于或包含条件，值必须为布尔值')
                 if c['discounted'] is False:
                     c.pop('discounted')  # Legacy unfinished UI: no longer a "No" restriction.
+            if c.get('personal_power'):
+                if kind != 'stations' or c.get('field') != 'modules' or op not in ('in', '=', 'contains'):
+                    raise ValueError('个人优惠仅支持采购模组／舰载武器')
+                from powerplay_tool import normalize_power
+                c['personal_power'] = normalize_power(c['personal_power'])
             keys = ("min", "max") if numeric and op in ("between", "outside") else ()
         for key in keys:
             raw = c.get(key)
@@ -729,7 +734,7 @@ def matching_sale_items(kind, row, cond):
     basic.pop('discounted', None)
     basic.pop('fresh_days', None)
     for item in field_raw(kind, row, field) or []:
-        info = discount_info(row, item, field)
+        info = discount_info(row, item, field, personal_power=cond.get('personal_power', ''))
         if cond.get('discounted') is True and info['discounted'] is not True:
             continue
         single = dict(row, **{_server_name(kind, field): [item]})

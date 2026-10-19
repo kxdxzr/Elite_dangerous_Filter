@@ -2,6 +2,7 @@
 import sys
 import tkinter as tk
 from tkinter import font, ttk
+from ui_display import windows_ui_font
 
 
 MODES = {'system': '跟随系统', 'light': '浅色', 'dark': '深色'}
@@ -54,8 +55,9 @@ class Appearance:
 
     def _fonts(self):
         default = font.nametofont('TkDefaultFont', root=self.root)
-        if sys.platform == 'win32' and 'Segoe UI' in font.families(self.root):
-            default.configure(family='Segoe UI', size=10)
+        if sys.platform == 'win32':
+            family = windows_ui_font(font.families(self.root), default.actual('family'))
+            default.configure(family=family, size=10, weight='normal')
         for name in ('TkTextFont', 'TkMenuFont', 'TkHeadingFont'):
             target = font.nametofont(name, root=self.root)
             target.configure(family=default.actual('family'), size=default.actual('size'))

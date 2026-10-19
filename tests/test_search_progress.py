@@ -5,6 +5,18 @@ from search_progress import measure, SearchProgress
 
 
 class ProgressTests(unittest.TestCase):
+    def test_unknown_total_uses_static_count_not_bouncing_animation(self):
+        bar, label, localizer = Mock(), Mock(), Mock(language='en')
+        localizer.tr.side_effect = lambda s: s
+        tracker = SearchProgress(bar, label, localizer)
+        tracker.update('RES 星系分页：2；已读取 1000 个星系')
+        self.assertEqual(bar.configure.call_args.kwargs['mode'], 'determinate')
+        self.assertIn('1,000', label.set.call_args.args[0])
+        self.assertIn('total unknown', label.set.call_args.args[0])
+        bar.start.assert_not_called()
+
+    def test_source_annotation_reports_real_stage_progress(self):
+        self.assertEqual(measure('任务来源控制派系：2/8'), (2, 8, '来源控制派系'))
     def test_known_work_ignores_arbitrary_page_budget(self):
         self.assertEqual(measure('', dict(scanned=500, total=800, pages=1, per=500)),
                          (500, 800, '候选核查'))

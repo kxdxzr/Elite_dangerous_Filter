@@ -72,7 +72,8 @@ def ring_distances(names, refresh=False, stop=None, progress=None):
 
     def chunk_load(chunk):
         def load():
-            targets = {name.casefold(): dict(seen=False, uncertain=False, distance=None, body='') for name in chunk}
+            targets = {name.casefold(): dict(seen=False, uncertain=False, has_rings=False,
+                                             distance=None, body='') for name in chunk}
             seen = set()
             for page in range(100):
                 if stop is not None and stop.is_set():
@@ -99,6 +100,9 @@ def ring_distances(names, refresh=False, stop=None, progress=None):
                     if not isinstance(rings, list):
                         target['uncertain'] = True
                     elif rings:
+                        target['has_rings'] = True
+                        if not target['body']:
+                            target['body'] = row['name']
                         distance = arrival(row.get('distance_to_arrival'))
                         if distance is None:
                             target['uncertain'] = True
@@ -109,7 +113,7 @@ def ring_distances(names, refresh=False, stop=None, progress=None):
                 if len(rows) < 500:
                     return targets
             raise ValueError('Body page limit reached; ring-distance coverage incomplete.')
-        key = 'ring-arrival-v1:' + '\n'.join(name.casefold() for name in chunk)
+        key = 'ring-arrival-v2:' + '\n'.join(name.casefold() for name in chunk)
         return pve_cache.cached(key, load, 300, refresh)[0]
 
     result = {}

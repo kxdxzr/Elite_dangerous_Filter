@@ -11,11 +11,15 @@ def measure(message, detail=None):
         total = detail.get('total', 0)
         # Spansh can cap its count at 10,000; do not call that a known total.
         return detail['scanned'], total if isinstance(total, (int, float)) and 0 < total < 10000 else None, '候选核查'
+    match = re.search(r'RES 星系分页：(\d+)；已读取 (\d+) 个星系', message)
+    if match:
+        return int(match[2]), None, '候选星系'
     for pattern, stage in (
         (r'查询派系详情：(\d+)/(\d+)', '派系详情'),
         (r'Checking (\d+)/(\d+)', '候选核查'),
         (r'Body batches (\d+)/(\d+)', '天体批次'),
         (r'星环.*?(\d+)/(\d+)', '星环批次'),
+        (r'任务来源控制派系：(\d+)/(\d+)', '来源控制派系'),
     ):
         match = re.search(pattern, message)
         if match:
@@ -68,8 +72,9 @@ class SearchProgress:
             self.label.set(f'{stage}: {done:,}/{total:,} ({min(100, 100 * done / total):.1f}%)')
         else:
             self.bar.stop()
-            self.bar.configure(mode='indeterminate')
-            self.bar.start(80)
+            # Unknown work is a count/status, not a fabricated percentage or
+            # a bouncing animation which hides already measured stage progress.
+            self.bar.configure(mode='determinate', maximum=100, value=0)
             self.label.set(f'{stage}: {done:,}; total unknown' if en else f'{stage}：{done:,}；总量未知')
 
     def finish(self, complete=False):

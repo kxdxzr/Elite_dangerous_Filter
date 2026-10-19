@@ -3,7 +3,10 @@
 Sources checked 2026-10-17:
 https://elite-dangerous.fandom.com/wiki/Discounts
 https://elite-dangerous.fandom.com/wiki/Li_Yong-Rui
-Personal rank/pledge bonuses and expired CG discounts are intentionally excluded.
+Reported public-discount bugs (not evidence against personal rank bonuses):
+https://forums.frontier.co.uk/threads/powerplay-related-discount-v2-0-even-if-not-pledge.630099/
+Public rules exclude personal bonuses and expired CG discounts. Engineer shopping
+may explicitly supply a pledged Power to assume its maximum-rank weapon bonus.
 """
 import re
 
@@ -21,9 +24,20 @@ ATTILIUS_SHIPS = {key(n) for n in ('Sidewinder', 'Sidewinder MkI', 'Eagle', 'Eag
 ATTILIUS_MODULES = {key(n) for n in ('Pulse Laser', 'Burst Laser', 'Beam Laser', 'Cannon', 'Multi-Cannon',
     'Rail Gun', 'Railgun', 'Chaff Launcher', 'Heat Sink Launcher', 'Heatsink Launcher')}
 CONTROLLED_STATES = {'exploited', 'fortified', 'stronghold'}
+MAX_RANK_WEAPON_DISCOUNTS = {key(name): percent for name, percent in (
+    ('A. Lavigny-Duval', 30), ('Arissa Lavigny-Duval', 30),
+    ('Denton Patreus', 40), ('Jerome Archer', 30), ('Yuri Grom', 30))}
 
 
-def discount_info(row, item, field):
+def combat_weapon(item):
+    return (item.get('category') == 'hardpoint' and bool(item.get('weapon_mode'))
+            and key(item.get('name', '')) not in {key(name) for name in (
+                'Mining Laser', 'Abrasion Blaster', 'Seismic Charge Launcher',
+                'Sub-Surface Displacement Missile', 'Sub-Surface Displacement Missile Launcher',
+                'Sub-Surface Extraction Missile')})
+
+
+def discount_info(row, item, field, personal_power=''):
     """Return the strongest known applicable rule, never sum overlapping rules.
 
     No rule match means unknown, not proof of full price. Missing item details
@@ -68,14 +82,21 @@ def discount_info(row, item, field):
         if (system, station) == (key('CD-43 11917'), key('Attilius Orbital')) and name in ATTILIUS_SHIPS:
             add(20, 'Attilius Orbital')
     elif field == 'modules':
-        if power == key('Edmund Mahon') and state in CONTROLLED_STATES and name in {key('Cargo Rack'), key('Hull Reinforcement Package')}:
+        pledged = key(personal_power)
+        if power == key('Arissa Lavigny-Duval'):
+            power = key('A. Lavigny-Duval')
+        if pledged == key('Arissa Lavigny-Duval'):
+            pledged = key('A. Lavigny-Duval')
+        # Explicit shopping assumption only, not a public benefit or verified rank.
+        if (pledged in MAX_RANK_WEAPON_DISCOUNTS and power == pledged
+                and state in CONTROLLED_STATES and combat_weapon(item)):
+            add(MAX_RANK_WEAPON_DISCOUNTS[pledged], f'{personal_power} (assumed max-rank personal bonus)')
+        # Guardian HRP/SRP broker discounts are reported bugged and excluded.
+        if power == key('Edmund Mahon') and state in ('fortified', 'stronghold') and name in {key('Cargo Rack'), key('Hull Reinforcement Package')}:
             add(20, 'Edmund Mahon')
-        # Weapons only; mining/utility hardpoints are not combat weapons.
-        if (power == key('Jerome Archer') and state in CONTROLLED_STATES
-                and item.get('category') == 'hardpoint' and item.get('weapon_mode')
-                and name not in {key('Mining Laser'), key('Abrasion Blaster'), key('Seismic Charge Launcher'),
-                                 key('Sub-Surface Displacement Missile'), key('Sub-Surface Extraction Missile')}):
-            add(20 if state == 'stronghold' else 10, 'Jerome Archer')
+        # Archer's public discount is treated as inactive due to a reported game
+        # bug (Frontier issue #70307: displayed discount not applied).
+        # Independent station discounts still apply in his territory.
         if (system, station) == (key('CD-43 11917'), key('Attilius Orbital')) and name in ATTILIUS_MODULES:
             try:
                 size = int(item.get('class'))

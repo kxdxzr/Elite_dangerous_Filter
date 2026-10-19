@@ -2,7 +2,54 @@
 import re
 
 CATALOG = {
+    '无': 'None',
     '中子星规划器（独立项目）': 'Neutron planner (separate project)',
+    '候选星系': 'Candidate systems',
+    '任务来源控制派系：': 'Mission source controlling factions: ',
+    '补查已知任务来源的控制派系…': 'Looking up controlling factions of known mission sources…',
+    'RES 类型（任务派系数为0时）': 'RES type (minimum mission factions = 0)',
+    '补充的 RES 星系按目标距离、目标控制小派系筛选；有已知任务来源的优先，未收录显示无数据。':
+        'Additional RES systems use target distance and controlling faction; known mission sources rank first, unlisted sources show No data.',
+    '最少任务派系数为0：保留任务结果并补充 RES 星系；1–8：仅检索海盗任务。0时来源条件停用但保留。':
+        'Minimum mission factions 0: retain mission results and add RES systems; 1–8: missions only. At 0, source filters are disabled but retained.',
+    '最少任务派系数为0：检索 RES 星系；1–8：检索海盗任务。0时不要求任务来源，来源条件停用但保留。':
+        'Minimum mission factions 0: search RES systems; 1–8: search massacre missions. At 0, mission sources are optional and source filters are disabled but retained.',
+    'RES 星系分页：': 'RES system pages: ',
+    '检索模式': 'Search mode', '海盗任务': 'Massacre missions', 'RES 星系': 'RES systems',
+    'RES 类型（星系模式）': 'RES type (system mode)',
+    '任意 RES（允许星环推定）': 'Any RES (allow ring inference)',
+    '仅明确 RES': 'Confirmed RES only', '仅 Low RES': 'Low RES only',
+    '仅普通 RES': 'Regular RES only', '仅 High RES': 'High RES only', '仅 Haz RES': 'Haz RES only',
+    '无数据': 'No data',
+    '查询符合条件的 RES 候选星系…': 'Finding matching RES candidate systems…',
+    '复核 RES 候选星系的星环…': 'Checking rings in RES candidate systems…',
+    'RES 星系模式：不要求任务来源；有已知任务来源的优先，无记录显示无数据。':
+        'RES system mode: mission sources are optional; known sources rank first, unlisted sources show No data.',
+    '有环仅推定 RES；Low／普通／High／Haz 必须有明确地点记录。':
+        'Rings only infer RES; Low / Regular / High / Haz require explicit site records.',
+    'RES 星系模式：半径针对 RES 所在星系；按目标控制小派系筛选，不要求任务。有已知任务来源的优先；未收录显示无数据。':
+        'RES system mode: radius applies to the RES system; filter by target controlling faction, no missions required. Known mission sources rank first; unlisted sources show No data.',
+    '未知目标自动用 Spansh 天体数据复核星环（距离留空也复核）；未查到星环则排除，查询失败或数据不完整仍为未知。':
+        'Unknown targets are checked against Spansh body data even without a distance limit. No rings in returned body data means exclusion; failed or incomplete lookups remain Unknown.',
+    '用 Spansh 复核未知目标星环…': 'Checking unknown targets for rings with Spansh…',
+    '候选地点不保证实时任务。配对与 RES/CNB 数据来自 EDTools；非无政府小派系数量仅估计可能发任务的派系。星环视为推定 RES，不推定 Low；明确无环视为无 RES，CNB 独立判断；数据缺失仍为情况未知。请在游戏中确认 BGS、声望和任务。':
+        'Candidates do not guarantee live missions. EDTools supplies pairs and RES/CNB records; non-Anarchy counts estimate potential issuers. Rings imply RES, not Low; confirmed ring-free systems have no RES, while CNB is independent. Missing data remains Unknown. Verify BGS, reputation and missions in game.',
+    '个人优惠仅支持采购模组／舰载武器': 'Personal bonuses only support module / ship weapon purchases.',
+    '个人优惠按满级假设计算，未核验实际等级或结算价。':
+        'Personal bonuses assume maximum rank; actual rank and checkout prices are not verified.',
+    '效忠 Power（个人优惠）': 'Pledged Power (personal bonus)',
+    '按满级个人优惠计算（默认）': 'Assume maximum-rank personal bonus (default)',
+    '满级优惠选项须为布尔值': 'The maximum-rank bonus option must be a boolean.',
+    '选择效忠 Power 后假设已解锁最高等级奖励，未读取实际等级；仅限本势力领地内适用武器，不与公共优惠相加，航母不计入。':
+        'Selecting a pledged Power assumes maximum-rank rewards are unlocked; actual rank is not read. Eligible weapons in that Power\'s territory only; no stacking with public discounts or carrier discounts.',
+    'Archer 公共折扣因已报告的游戏 Bug 不计入；个人等级优惠另算':
+        'Archer public discount excluded due to a reported game bug; personal rank bonus handled separately',
+    'Mahon：普通货架／船体增强优惠保留；Guardian HRP／SRP 因已报告的游戏 Bug 不计入':
+        'Mahon: standard Cargo Rack / HRP discounts retained; Guardian HRP / SRP excluded due to a reported game bug',
+    'Archer 势力折扣因已报告的游戏 Bug 不计入': 'Archer Power discount excluded due to a reported game bug',
+    '采购站停机坪（可停靠船型）': 'Shopping pad (ship size)',
+    '停机坪请选择不限、S、M或L': 'Select Any, S, M or L for the landing pad.',
+    '已确认停机坪': 'Confirmed landing pad',
     '外观': 'Appearance', '跟随系统': 'Follow system', '浅色': 'Light', '深色': 'Dark',
     '星系、空间站与顺路工具': 'Systems, stations and tools for your journey',
     '查询': 'Search', '复制站名': 'Copy station name', '关闭': 'Close',

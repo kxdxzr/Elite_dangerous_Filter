@@ -15,24 +15,31 @@ import pve_tool as tool
 import faction_options
 from powerplay_tool import POWERS, POWER_LABELS, normalize_power
 
-NOTE_CN = '候选地点不保证实时任务。配对与 RES/CNB 数据来自 EDTools；非无政府小派系数量仅估计可能发任务的派系。星环视为推定 RES，不推定 Low；无地点数据标记情况未知。请在游戏中确认 BGS、声望和任务。'
+NOTE_CN = '候选地点不保证实时任务。配对与 RES/CNB 数据来自 EDTools；非无政府小派系数量仅估计可能发任务的派系。星环视为推定 RES，不推定 Low；明确无环视为无 RES，CNB 独立判断；数据缺失仍为情况未知。请在游戏中确认 BGS、声望和任务。'
 
 
 def open_window(app):
     win = Toplevel(app.root)
     win.title('海盗任务查找器')
     win.geometry('1400x820')
-    controls = ttk.Frame(win, padding=8)
+    from form_scroll import settings_form
+    form = settings_form(win)
+    controls = ttk.Frame(form, padding=8)
     controls.pack(fill='x')
     variables = {key: tk.StringVar(win, value=value) for key, value in {
         'reference': 'Sol', 'radius': '50', 'min_factions': '0', 'min_federation': '0', 'min_empire': '0',
         'source_faction': '', 'source_controller': '', 'target_controller': '', 'power': '',
-        'power_scope': '任务来源', 'source_pad': '', 'source_station_max_ls': '', 'target_ring_max_ls': ''}.items()}
+        'power_scope': '任务来源', 'source_pad': '', 'source_station_max_ls': '', 'target_ring_max_ls': '',
+         'site_type': '任意 RES（允许星环推定）'}.items()}
     variables.update(prefer_low=tk.BooleanVar(win, value=True), cnb_fallback=tk.BooleanVar(win, value=True))
     faction_feedback = tk.StringVar(win, value='输入至少两个字符联想；选择候选后使用完整名称。')
     faction_boxes = {}
     from filter_gui import attach_system_suggest
-    specs = [('reference', '参考星系'), ('radius', '半径 ly（0=无限）'),
+    site_values = {'任意 RES（允许星环推定）': 'any', '仅明确 RES': 'confirmed',
+                   '仅 Low RES': 'low', '仅普通 RES': 'reg', '仅 High RES': 'high', '仅 Haz RES': 'haz'}
+    control_widgets, action_widgets = {}, {}
+    specs = [('site_type', 'RES 类型（任务派系数为0时）'),
+             ('reference', '参考星系'), ('radius', '半径 ly（0=无限）'),
              ('min_factions', '最少任务派系（0–8）'), ('min_federation', '最少联邦派系（0–8）'),
              ('min_empire', '最少帝国派系（0–8）'), ('source_faction', '来源存在派系'),
              ('source_controller', '来源控制小派系'), ('target_controller', '目标控制小派系'),
@@ -41,9 +48,13 @@ def open_window(app):
              ('target_ring_max_ls', '目标星环最大距离 Ls')]
     for index, (key, label) in enumerate(specs):
         row, column = divmod(index, 5)
-        ttk.Label(controls, text=label).grid(row=row * 2, column=column, sticky='w', padx=5)
+        ttk.Label(controls, text=label, wraplength=250).grid(row=row * 2, column=column, sticky='w', padx=5)
         var = variables[key]
-        if key.startswith('min_'):
+        if key == 'site_type':
+            entry = ttk.Combobox(controls, textvariable=var,
+                                 values=list(site_values),
+                                 state='readonly', width=26)
+        elif key.startswith('min_'):
             entry = ttk.Combobox(controls, textvariable=var, values=list(range(9)), state='readonly', width=18)
         elif key == 'source_pad':
             entry = ttk.Combobox(controls, textvariable=var, values=['', 'S', 'M', 'L'], state='readonly', width=22)
@@ -58,14 +69,23 @@ def open_window(app):
         else:
             entry = ttk.Entry(controls, textvariable=var, width=26)
         entry.grid(row=row * 2 + 1, column=column, sticky='ew', padx=5, pady=(2, 8))
+        control_widgets[key] = entry
         controls.columnconfigure(column, weight=1)
     actions = ttk.Frame(win, padding=8)
     actions.pack(fill='x')
     for key, text in [('prefer_low', '优先 RES Low'), ('cnb_fallback', '无 RES 命中时回退 CNB')]:
-        ttk.Checkbutton(actions, text=text, variable=variables[key]).pack(side='left', padx=4)
-    ttk.Label(win, text=NOTE_CN, wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
-    ttk.Label(win, text='距离留空不限；来源停机坪与距离须同站满足。星环距离为最近已知有环天体的到达 Ls，不是具体 RES 位置。', wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
-    ttk.Label(win, textvariable=faction_feedback, style='Muted.TLabel').pack(fill='x', padx=8)
+        button = ttk.Checkbutton(actions, text=text, variable=variables[key])
+        button.pack(side='left', padx=4)
+        action_widgets[key] = button
+    ttk.Label(form, text=NOTE_CN, wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
+    ttk.Label(form, text='距离留空不限；来源停机坪与距离须同站满足。星环距离为最近已知有环天体的到达 Ls，不是具体 RES 位置。', wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
+    ttk.Label(form, textvariable=faction_feedback, style='Muted.TLabel').pack(fill='x', padx=8)
+    ttk.Label(form, text='未知目标自动用 Spansh 天体数据复核星环（距离留空也复核）；未查到星环则排除，查询失败或数据不完整仍为未知。',
+              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
+    ttk.Label(form, text='补充的 RES 星系按目标距离、目标控制小派系筛选；有已知任务来源的优先，未收录显示无数据。',
+              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
+    ttk.Label(form, text='最少任务派系数为0：保留任务结果并补充 RES 星系；1–8：仅检索海盗任务。0时来源条件停用但保留。',
+              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
     status = tk.StringVar(win, value='半径针对任务来源星系；0 不限制距离。有环推定 RES；情况未知单独标注，不作为无 RES 的证据。')
     ttk.Label(win, textvariable=status, wraplength=1360).pack(fill='x', padx=8, pady=4)
     progress = ttk.Progressbar(win, mode='indeterminate')
@@ -99,6 +119,8 @@ def open_window(app):
 
     def result_value(row, key):
         value = row.get(key, '')
+        if value is None or value == '':
+            return '-'
         if key == 'distance':
             return format_ly(value)
         if key in ('source_station_ls', 'target_ring_ls'):
@@ -110,6 +132,13 @@ def open_window(app):
 
     def criteria():
         args = {key: variable.get() for key, variable in variables.items()}
+        args['search_mode'] = 'expanded' if int(args['min_factions']) == 0 else 'missions'
+        args['site_type'] = site_values[args['site_type']]
+        if args['search_mode'] == 'expanded':
+            # Preserve disabled editor drafts but never apply mission-only filters.
+            args.update(min_factions='0', min_federation='0', min_empire='0', source_faction='',
+                        source_controller='', source_pad='', source_station_max_ls='',
+                        power_scope='击杀目标')
         args['radius'] = float(args['radius'])
         for key in ('source_station_max_ls', 'target_ring_max_ls'):
             args[key] = float(args[key]) if args[key].strip() else None
@@ -163,11 +192,13 @@ def open_window(app):
             messagebox.showwarning('参数错误', str(exc), parent=win)
 
     def finish():
+        control_widgets['min_factions'].configure(state='readonly')
         search_button.configure(state='normal')
         import_button.configure(state='normal')
         online_button.configure(state='normal')
         refresh_button.configure(state='normal')
         progress.stop()
+        sync_mode()
 
     def run(refresh=False):
         try:
@@ -178,6 +209,7 @@ def open_window(app):
         if refresh:
             state['page'] = None
         snapshot = state['page']
+        control_widgets['min_factions'].configure(state='disabled')
         stop.clear()
         search_button.configure(state='disabled')
         import_button.configure(state='disabled')
@@ -262,7 +294,8 @@ def open_window(app):
     ttk.Button(actions, text='停止', command=stop.set).pack(side='left')
     import_button = ttk.Button(actions, text='导入 PvE 网页', command=import_page)
     import_button.pack(side='left', padx=8)
-    ttk.Button(actions, text='打开 PvE 网页', command=open_page).pack(side='left')
+    page_button = ttk.Button(actions, text='打开 PvE 网页', command=open_page)
+    page_button.pack(side='left')
     online_button = ttk.Button(actions, text='使用在线数据', command=use_online)
     online_button.pack(side='left', padx=8)
     footer = ttk.Frame(win, padding=8)
@@ -280,15 +313,35 @@ def open_window(app):
         + '\n\n' + app.localizer.tr('缓存信息：') + json.dumps({key: (state['info'] or {}).get(key, [])
             for key in ('dataset_cache', 'controller_cache', 'power_cache')}, ensure_ascii=False, indent=2), parent=win)).pack(side='left')
     app.bind_tool_state('pve', win, variables)
+    if variables['site_type'].get() not in site_values:
+        variables['site_type'].set('任意 RES（允许星环推定）')
+
+    def sync_mode(*args):
+        res_mode = variables['min_factions'].get() == '0'
+        mission_only = ('min_federation', 'min_empire', 'source_faction',
+                        'source_controller', 'power_scope', 'source_pad', 'source_station_max_ls')
+        readonly = ('min_factions', 'min_federation', 'min_empire', 'power_scope', 'source_pad')
+        for key in mission_only:
+            control_widgets[key].configure(state='disabled' if res_mode else 'readonly' if key in readonly else 'normal')
+        control_widgets['site_type'].configure(state='readonly' if res_mode else 'disabled')
+        action_widgets['cnb_fallback'].configure(state='normal')
+        for button in (import_button, page_button):
+            button.configure(state='disabled' if res_mode else 'normal')
+    variables['min_factions'].trace_add('write', sync_mode)
+    sync_mode()
     win.protocol('WM_DELETE_WINDOW', lambda: (stop.set(), win.destroy()))
     # Source smoke tests can exercise the real UI without invoking network queries.
     win.result_tree, win.search_state = tree, state
     win.faction_boxes, win.faction_feedback = faction_boxes, faction_feedback
+    win.criteria, win.control_widgets = criteria, control_widgets
     def dispose(event):
         if event.widget is win:
             # Debug/accessor attributes must not leave window -> child -> window
             # cycles whose Tk variables might be collected by a worker thread.
             faction_boxes.clear()
+            control_widgets.clear()
+            action_widgets.clear()
+            win.criteria = win.control_widgets = None
             win.result_tree = win.search_state = win.faction_feedback = None
             win.session_variables = {}
     win.bind('<Destroy>', dispose, add='+')

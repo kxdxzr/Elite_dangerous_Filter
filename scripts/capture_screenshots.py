@@ -32,9 +32,10 @@ def main():
     args = parser.parse_args()
     if sys.platform != 'win32':
         parser.error('Window screenshots require Windows.')
-    from PIL import ImageGrab
-    ctypes.windll.user32.SetProcessDPIAware()
     sys.path.insert(0, str(PROJECT / 'src'))
+    from ui_display import initialize_display
+    initialize_display()
+    from PIL import ImageGrab
     args.output.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix='elite-screenshots-', dir=args.work_dir) as folder, ExitStack() as stack:

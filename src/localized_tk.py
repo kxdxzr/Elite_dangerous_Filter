@@ -223,7 +223,10 @@ class Treeview(base.Treeview):
                        'source_controller', 'target_controller', 'source_power', 'target_power',
                        'neighbour', 'body_matches', 'ring_matches', 'relations'}
         columns = self.cget('columns')
-        return [value if index < len(columns) and columns[index] in identifiers else self._manager.tr(value)
+        return [value if (index < len(columns) and columns[index] in identifiers
+                          and not (columns[index] == 'source' and value == '无数据')
+                          and not (columns[index] in ('source_controller', 'target_controller')
+                                   and value == '情况未知')) else self._manager.tr(value)
                 for index, value in enumerate(values)]
 
     def delete(self, *items):

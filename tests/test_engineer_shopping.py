@@ -10,6 +10,27 @@ from i18n import translate
 
 
 class EngineerShoppingTests(unittest.TestCase):
+    def test_personal_bonus_search_export_and_assumption_snapshot(self):
+        laser = dict(name='Beam Laser', category='hardpoint', weapon_mode='Fixed', **{'class': 2, 'rating': 'D'})
+        condition = dict(field='modules', op='in', values=['Beam Laser'], discounted=True)
+        criteria = tool.build_criteria('Start', 'Leesti', 80, '', condition, pledged_power='Jerome Archer')
+        row = self.station(1, 160, system_controlling_power='Jerome Archer', modules=[laser])
+        before = copy.deepcopy(criteria)
+        with patch.object(eng, 'resolve_ref', side_effect=lambda name: (name, (0, 0, 0) if name == 'Start' else (320, 0, 0), False)), \
+                patch.object(eng, 'resolve_option_cond'), \
+                patch.object(eng, '_http_json', return_value=dict(count=1, results=[row])):
+            result = tool.search(criteria)
+        self.assertEqual(criteria, before)
+        self.assertEqual(len(result['rows']), 1)
+        headers, records = tool.export_table(result, 'en', lambda text: translate(text, 'en'))
+        self.assertIn('30', records[0])
+        self.assertTrue(any('assumed max-rank' in str(value) for value in records[0]))
+        self.assertEqual(result['pledged_power'], 'Jerome Archer')
+        for kwargs in ({}, dict(pledged_power='Jerome Archer', assume_max_rank=False)):
+            other = tool.build_criteria('Start', 'Leesti', 80, '', condition, **kwargs)
+            self.assertNotIn('personal_power', other.conditions[0])
+            self.assertFalse(eng.match_field('stations', row, other.conditions[0]))
+
     def module(self):
         return dict(type='field', field='modules', op='in', values=['Shield Booster'],
                     **{'class': ['0'], 'rating': ['A'], 'discounted': True})
@@ -21,9 +42,9 @@ class EngineerShoppingTests(unittest.TestCase):
                          system_power_state='Fortified',
                          modules=[dict(name='Shield Booster', **{'class': 0, 'rating': 'A'})]), **kwargs)
 
-    def run_search(self, rows, direct=320, jump=80, extra=1, want=100, ignore_planetary=False):
+    def run_search(self, rows, direct=320, jump=80, extra=1, want=100, ignore_planetary=False, landing_pad=''):
         criteria = tool.build_criteria('Start', 'Leesti', jump, 1500, self.module(), max_extra_jumps=extra,
-                                       ignore_planetary=ignore_planetary)
+                                       ignore_planetary=ignore_planetary, landing_pad=landing_pad)
         def resolve(name):
             return name, (0, 0, 0) if name == 'Start' else (direct, 0, 0), False
         with patch.object(eng, 'resolve_ref', side_effect=resolve), \
@@ -55,6 +76,55 @@ class EngineerShoppingTests(unittest.TestCase):
         for extra in ('', '1.5', -1, True, 'nan', 'inf'):
             with self.subTest(extra=extra), self.assertRaises(ValueError):
                 tool.build_criteria('Sol', 'Leesti', 80, '', module, max_extra_jumps=extra)
+
+    def test_landing_pad_criteria_defaults_and_validation(self):
+        for value, expected in (('', ''), ('不限', ''), (' S ', 'S'), ('M', 'M'), ('L', 'L')):
+            criteria = tool.build_criteria('Sol', 'Leesti', 80, '', self.module(), landing_pad=value)
+            self.assertEqual(criteria.landing_pad, expected)
+        for value in ('XL', 'Large', 'm', None, [], True):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                tool.build_criteria('Sol', 'Leesti', 80, '', self.module(), landing_pad=value)
+        self.assertEqual(tool.build_criteria('Sol', 'Leesti', 80, '', self.module()).landing_pad, '')
+
+    def test_confirmed_pad_rejects_missing_invalid_and_zero_counts(self):
+        for value in (None, '', 'unknown', True, False, -1, 0, .5, 'nan', 'inf'):
+            self.assertIsNone(tool.confirmed_pad(dict(large_pads=value, has_large_pad=False)))
+        self.assertEqual(tool.confirmed_pad(dict(large_pads='2')), 'L')
+        self.assertEqual(tool.confirmed_pad(dict(has_large_pad=True)), 'L')
+        self.assertEqual(tool.confirmed_pad(dict(large_pads=0, medium_pads=1, small_pads=3)), 'M')
+
+    def test_ship_size_filter_accepts_larger_pads_without_assuming_unknowns(self):
+        rows = [self.station(1, 160, small_pads=1), self.station(2, 160, medium_pads=1),
+                self.station(3, 160, large_pads=1), self.station(4, 160, has_large_pad=True),
+                self.station(5, 160), self.station(6, 160, small_pads=0, medium_pads=0, large_pads=0)]
+        for pad, expected in (('', [1, 2, 3, 4, 5, 6]), ('S', [1, 2, 3, 4]),
+                               ('M', [2, 3, 4]), ('L', [3, 4])):
+            with self.subTest(pad=pad):
+                result = self.run_search(copy.deepcopy(rows), landing_pad=pad)
+                self.assertEqual([row['id'] for row in result['rows']], expected)
+                self.assertEqual(result['landing_pad'], pad)
+
+    def test_pad_and_all_stock_must_match_same_station_before_counting_want(self):
+        rows = [self.station(1, 160, medium_pads=1), self.station(2, 160),
+                self.station(3, 160, has_large_pad=True, modules=[]),
+                self.station(4, 160, has_large_pad=True)]
+        result = self.run_search(rows, landing_pad='L', want=1)
+        self.assertEqual([row['id'] for row in result['rows']], [4])
+        self.assertEqual(result['scanned'], 4)
+        headers, records = tool.export_table(result, 'en', lambda text: translate(text, 'en'))
+        self.assertEqual(records[0][headers.index('Confirmed landing pad')], 'L')
+
+    def test_pad_rejections_keep_fetching_pages_until_a_valid_station(self):
+        criteria = tool.build_criteria('Start', 'Leesti', 80, '', self.module(), landing_pad='L')
+        before = copy.deepcopy(criteria)
+        pages = [dict(count=501, results=[self.station(i, 160, medium_pads=1) for i in range(500)]),
+                 dict(count=501, results=[self.station(500, 160, has_large_pad=True)])]
+        with patch.object(eng, 'resolve_ref', side_effect=lambda name: (name, (0, 0, 0) if name == 'Start' else (320, 0, 0), False)), \
+                patch.object(eng, 'resolve_option_cond'), patch.object(eng, '_http_json', side_effect=pages) as http:
+            result = tool.search(criteria, want=1)
+        self.assertEqual(http.call_count, 2)
+        self.assertEqual([row['id'] for row in result['rows']], [500])
+        self.assertEqual(criteria, before)
 
     def test_multi_jump_candidates_and_extra_jump_budget(self):
         # Both legs are two jumps, yet this is a zero-extra-jump shopping stop.

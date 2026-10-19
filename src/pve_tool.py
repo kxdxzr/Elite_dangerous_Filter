@@ -12,7 +12,7 @@ import urllib.request
 import urllib.error
 import time
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from html.parser import HTMLParser
 from html import unescape
 
@@ -59,8 +59,14 @@ class Criteria:
     source_pad: str = ''
     source_station_max_ls: float | None = None
     target_ring_max_ls: float | None = None
+    search_mode: str = 'missions'
+    site_type: str = 'any'
 
     def validate(self):
+        if self.search_mode not in ('missions', 'res_systems', 'expanded'):
+            raise ValueError('Unknown PvE search mode.')
+        if self.site_type not in ('any', 'confirmed', 'low', 'reg', 'high', 'haz'):
+            raise ValueError('Unknown RES site type.')
         if not isinstance(self.reference, str) or not self.reference.strip():
             raise ValueError('Enter a reference system (also used to sort unlimited searches).')
         if isinstance(self.radius, bool) or not isinstance(self.radius, (int, float)) or not math.isfinite(self.radius) or self.radius < 0:
@@ -440,9 +446,13 @@ def power_systems(name, refresh=False, stop=None, progress=None, workers=4):
 
 
 def site_kind(row):
+    rings = row.get('ring_count')
+    # Confirmed absence of rings rules out RES, even in stale site records.
+    # CNB does not depend on rings and remains independently eligible.
+    if type(rings) is int and rings == 0:
+        return 'cnb' if row.get('cnb') else 'none'
     if row.get('res_types'):
         return 'res'
-    rings = row.get('ring_count')
     if type(rings) is int and rings > 0:
         return 'rings'
     if row.get('cnb'):
@@ -486,8 +496,33 @@ def equal(actual, requested):
 
 def search(criteria, *, page=None, page_loader=fetch_page, details_loader=system_details,
             resolver=eng.resolve_ref, stop=None, progress=None, refresh=False, workers=None,
-            controller_loader=None, power_loader=None, ring_loader=None):
+            controller_loader=None, power_loader=None, ring_loader=None,
+            systems_loader=None, dataset_loader=None, include_cnb_candidates=False):
     criteria.validate()  # Invalid inputs cause zero network requests.
+    if criteria.search_mode == 'expanded':
+        from res_systems import merge_results, annotate_source_controllers
+        try:
+            legacy_info, legacy_rows = search(replace(criteria, search_mode='missions'),
+                page=page, page_loader=page_loader, details_loader=details_loader, resolver=resolver,
+                stop=stop, progress=progress, refresh=refresh, workers=workers,
+                controller_loader=controller_loader, power_loader=power_loader, ring_loader=ring_loader,
+                include_cnb_candidates=criteria.cnb_fallback)
+        except Exception as exc:
+            legacy_info, legacy_rows = dict(complete=False, errors=[str(exc)], notes=[]), []
+        extra_info, extra_rows = search(replace(criteria, search_mode='res_systems'), resolver=resolver,
+            stop=stop, progress=progress, refresh=refresh, ring_loader=ring_loader,
+            systems_loader=systems_loader, dataset_loader=dataset_loader)
+        info, rows = merge_results(criteria, legacy_info, legacy_rows, extra_info, extra_rows)
+        annotation_started = time.monotonic()
+        annotate_source_controllers(rows, info, details_loader=details_loader, stop=stop,
+                                    refresh=refresh, progress=progress)
+        info['timings']['total'] += time.monotonic() - annotation_started
+        return info, rows
+    if criteria.search_mode == 'res_systems':
+        from res_systems import search as search_res_systems
+        return search_res_systems(criteria, resolver=resolver, stop=stop, progress=progress,
+                                  refresh=refresh, ring_loader=ring_loader,
+                                  systems_loader=systems_loader, dataset_loader=dataset_loader)
     started = time.monotonic()
     reporter = ProgressReporter(progress)
     timings = {}
@@ -749,6 +784,34 @@ def search(criteria, *, page=None, page_loader=fetch_page, details_loader=system
         info['notes'].append('Stopped; partial results only, no CNB fallback.')
     timings['scan'] = time.monotonic() - stage
     stage = time.monotonic()
+    # Unknown EDTools sites are checked even without an arrival-distance limit.
+    # Do not infer absence from failed requests, empty system coverage or bad data.
+    if criteria.target_ring_max_ls is None and unknown and (stop is None or not stop.is_set()):
+        reporter.emit('用 Spansh 复核未知目标星环…', True)
+        try:
+            ring_data = (pve_access.ring_distances([row['target'] for row in unknown], refresh=refresh,
+                         stop=stop, progress=reporter.emit) if ring_loader is None else
+                         ring_loader([row['target'] for row in unknown]))
+        except Exception as exc:
+            info['complete'] = False
+            info['errors'].append('Spansh ring verification: ' + str(exc))
+            ring_data = {}
+        remaining = []
+        for row in unknown:
+            record = ring_data.get(row['target'].casefold(), {})
+            distance = pve_access.arrival(record.get('distance'))
+            if record.get('has_rings') is True or distance is not None:
+                row.update(site='RES（星环推定）', site_evidence='rings',
+                           target_ring_body=record.get('body', ''),
+                           site_record=row.get('site_record', '') + '; Spansh: rings found')
+                if distance is not None:
+                    row['target_ring_ls'] = distance
+                res.append(row)
+            elif record.get('seen') and not record.get('uncertain'):
+                rejected('target_no_rings')
+            else:
+                remaining.append(row)
+        unknown = remaining
     if criteria.target_ring_max_ls is not None and stop is not None and stop.is_set():
         res, unknown, cnb = [], [], []
         info['complete'] = False
@@ -791,6 +854,8 @@ def search(criteria, *, page=None, page_loader=fetch_page, details_loader=system
         info['notes'].append('Data incomplete; CNB fallback suppressed, no confirmed absence of RES matches.')
     if unknown:
         info['notes'].append('Unknown site data is shown, not treated as confirmed RES absence; CNB fallback suppressed if no RES matches.')
+    if include_cnb_candidates:
+        result = res + unknown + cnb
     diagnostics['unknown_sites'] = len(unknown)
     diagnostics['data_errors'] = len(info['errors'])
     info['notes'].append('Coverage/filter diagnostics: ' + json.dumps(diagnostics, ensure_ascii=False))

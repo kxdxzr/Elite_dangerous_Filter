@@ -231,6 +231,21 @@ class AppearanceGuiTests(unittest.TestCase):
                 self.assertEqual(window.cget('background'), appearance.PALETTES[mode]['bg'])
         self.assertEqual(session_store.load(self.session), {})
 
+    def test_pve_and_shopping_forms_scroll_without_hiding_results(self):
+        for method in ('pve_window', 'engineer_shopping_window'):
+            window = getattr(self.app, method)()
+            for size in ('1400x820', '1100x700'):
+                with self.subTest(method=method, size=size):
+                    window.geometry(size)
+                    window.deiconify()
+                    self.root.update()
+                    self.assertTrue(window.result_tree.winfo_ismapped())
+                    self.assertGreater(window.result_tree.winfo_height(), 100)
+                    window.settings_canvas.yview_moveto(1)
+                    self.assertGreater(window.settings_canvas.yview()[0], 0)
+                    window.settings_canvas.yview_moveto(0)
+            window.destroy()
+
     def test_copy_and_export_footers_remain_visible(self):
         self.root.deiconify()
         for method in ('pve_window', 'rare_goods_window', 'carrier_parking_window', 'midpoint_window'):

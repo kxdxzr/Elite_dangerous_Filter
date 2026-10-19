@@ -484,6 +484,11 @@ class Row:
             self.v_discount = tk.StringVar(value='不限')
             self.cb_discount = ttk.Combobox(self.subcontrols, textvariable=self.v_discount, width=6,
                                            values=['不限', '是'], state='readonly')
+            self.lbl_discount_bug = ttk.Label(self.subcontrols,
+                text='Archer 公共折扣因已报告的游戏 Bug 不计入；个人等级优惠另算', style='Muted.TLabel')
+            self.lbl_mahon_bug = ttk.Label(self.frame,
+                text='Mahon：普通货架／船体增强优惠保留；Guardian HRP／SRP 因已报告的游戏 Bug 不计入',
+                style='Muted.TLabel', wraplength=900)
             self.opt_info = tk.StringVar(value="")
             self.lbl_opt = ttk.Label(bar, textvariable=self.opt_info, width=10,
                                      style='Muted.TLabel')
@@ -629,6 +634,10 @@ class Row:
         if show:
             self._refresh_spec_options()
         self._toggle_fresh()
+        if show:
+            self.lbl_mahon_bug.pack(fill='x', padx=4, pady=(2, 0))
+        else:
+            self.lbl_mahon_bug.pack_forget()
         return show
 
     def _single_module_name(self):
@@ -698,7 +707,7 @@ class Row:
             self.subcontrols.pack(fill='x', pady=(3, 0))
         else:
             self.subcontrols.pack_forget()
-        for w in (self.lbl_fresh, self.cb_fresh, self.lbl_discount, self.cb_discount):
+        for w in (self.lbl_fresh, self.cb_fresh, self.lbl_discount, self.cb_discount, self.lbl_discount_bug):
             if show:
                 w.pack(side="left", padx=(4, 0))
             else:
@@ -1865,6 +1874,8 @@ class App:
 
 
 if __name__ == "__main__":
+    from ui_display import initialize_display
+    initialize_display()
     if "--session-test" in sys.argv:
         from exe_session_test import run
         index = sys.argv.index("--session-test")

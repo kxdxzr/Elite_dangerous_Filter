@@ -186,6 +186,102 @@ class LocalizedGuiTests(unittest.TestCase):
         label.destroy()
         self.app.tree.delete(item)
 
+    def test_res_mode_real_search_and_export_reuses_mission_source_column(self):
+        import pve_gui
+        from test_res_systems import system, ring
+        self.app.set_language('en')
+        win = self.app.pve_window()
+        win.session_variables['min_factions'].set('0')
+        win.session_variables['site_type'].set('任意 RES（允许星环推定）')
+        win.session_variables['radius'].set('50')
+        win.session_variables['target_controller'].set('Test Faction')
+        win.session_variables['power'].set('')
+        actual_search = pve_gui.tool.search
+        pairs = {'Mission Source': dict(target='Known', x=0, y=0, z=0)}
+        def offline_search(criteria, **kw):
+            from test_pve_tool import page
+            if 'resolver' in kw:
+                return actual_search(criteria, **kw)
+            return actual_search(criteria, **kw, resolver=lambda name: (name, (0, 0, 0), False),
+                page_loader=lambda *args: page(),
+                details_loader=lambda name: dict(controlling_minor_faction='Test Faction'),
+                systems_loader=lambda *args: [system('No source', 1), system('Known', 20)],
+                dataset_loader=lambda url: pairs if url == pve_gui.tool.PAIRS_URL else {},
+                ring_loader=lambda names: {name.casefold(): ring() for name in names})
+        def find_button(text):
+            stack = [win]
+            while stack:
+                widget = stack.pop()
+                if isinstance(widget, gui.ttk.Button) and widget.cget('text') == text:
+                    return widget
+                stack.extend(widget.winfo_children())
+            self.fail('Button missing: ' + text)
+        with patch.object(pve_gui.tool, 'search', side_effect=offline_search), \
+                patch.object(pve_gui.messagebox, 'showerror') as errors:
+            find_button('Search').invoke()
+            deadline = time.monotonic() + 5
+            while win.search_state['info'] is None and time.monotonic() < deadline:
+                self.root.update()
+                time.sleep(.01)
+        self.assertIsNotNone(win.search_state['info'], errors.call_args)
+        errors.assert_not_called()
+        items = win.result_tree.get_children()
+        self.assertEqual(len(items), 2)
+        self.assertEqual(win.result_tree.item(items[0], 'values')[0], 'Mission Source')
+        self.assertEqual(win.result_tree.item(items[1], 'values')[0], 'No data')
+        self.assertEqual(win.result_tree.item(items[0], 'values')[7], 'Test Faction')
+        self.assertEqual(win.result_tree.item(items[1], 'values')[7], '-')
+        self.assertEqual(win.result_tree.item(items[1], 'values')[4], '-')
+        with tempfile.TemporaryDirectory() as folder:
+            output = str(Path(folder) / 'res.csv')
+            with patch.object(pve_gui.filedialog, 'asksaveasfilename', return_value=output):
+                find_button('Export CSV').invoke()
+            with open(output, encoding='utf-8-sig', newline='') as file:
+                records = list(csv.reader(file))
+            data = [row for row in records if row and not row[0].startswith('#')]
+            self.assertEqual(data[0][0], 'Mission source')
+            self.assertEqual(data[-1][0], 'No data')
+            self.assertEqual(data[-1][7], '-')
+            self.assertEqual(data[-1][4], '-')
+        win.session_variables['min_factions'].set('1')
+        win.session_variables['target_controller'].set('')
+
+    def test_res_mode_disables_mission_filters_preserves_drafts_and_localizes(self):
+        self.app.set_language('zh')
+        win = self.app.pve_window()
+        variables = win.session_variables
+        variables['min_factions'].set('0')
+        variables['cnb_fallback'].set(True)
+        variables['site_type'].set('仅 Low RES')
+        variables['source_station_max_ls'].set('unfinished draft')
+        variables['target_controller'].set('Test Faction')
+        criteria = win.criteria()
+        self.assertEqual(criteria.search_mode, 'expanded')
+        self.assertTrue(criteria.cnb_fallback)
+        self.assertEqual(criteria.site_type, 'low')
+        self.assertEqual(criteria.min_factions, 0)
+        self.assertEqual(criteria.source_station_max_ls, None)
+        self.assertEqual(criteria.target_controller, 'Test Faction')
+        self.assertEqual(str(win.control_widgets['min_factions']['state']), 'readonly')
+        self.assertEqual(str(win.control_widgets['source_controller']['state']), 'disabled')
+        self.assertEqual(str(win.control_widgets['target_controller']['state']), 'normal')
+        self.app.set_language('en')
+        self.assertEqual(win.control_widgets['site_type']._display.get(), 'Low RES only')
+        self.assertEqual(win.criteria(), criteria)
+        self.assertEqual(variables['source_station_max_ls'].get(), 'unfinished draft')
+        snapshot = self.app._state_dict()['tools']['pve']
+        self.app._tool_states['pve'] = snapshot
+        win.destroy()
+        restored = self.app.pve_window()
+        self.assertEqual(restored.criteria(), criteria)
+        restored.session_variables['min_factions'].set('8')
+        self.assertEqual(str(restored.control_widgets['min_factions']['state']), 'readonly')
+        self.assertEqual(restored.session_variables['min_factions'].get(), '8')
+        # Leave subsequent GUI tests with a valid mission draft.
+        restored.session_variables['source_station_max_ls'].set('')
+        restored.session_variables['min_factions'].set('0')
+        restored.session_variables['target_controller'].set('')
+
     def test_pve_import_search_export_and_copy_real_ui(self):
         import pve_gui
         import pve_tool
@@ -193,6 +289,7 @@ class LocalizedGuiTests(unittest.TestCase):
         self.app.set_language('en')
         window = self.app.pve_window()
         window.session_variables['radius'].set('50')
+        window.session_variables['min_factions'].set('1')
         # This test owns its query; prior GUI tests may have changed preferences.
         for key in ('source_faction', 'source_controller', 'target_controller', 'power'):
             window.session_variables[key].set('')
@@ -223,7 +320,9 @@ class LocalizedGuiTests(unittest.TestCase):
                 wait(lambda: window.search_state['page'] is not None)
             actual_search = pve_tool.search
             def offline_search(criteria, **kw):
-                return actual_search(criteria, **kw, resolver=lambda name: (name, (0, 0, 0), False))
+                from test_pve_tool import DETAILS
+                return actual_search(criteria, **kw, resolver=lambda name: (name, (0, 0, 0), False),
+                                     details_loader=lambda name: DETAILS['Alpha'])
             with patch.object(pve_gui.tool, 'search', side_effect=offline_search):
                 button('Search').invoke()
                 wait(lambda: window.search_state['info'] is not None)
@@ -254,6 +353,7 @@ class LocalizedGuiTests(unittest.TestCase):
         from test_pve_tool import candidate
         self.app.set_language('en')
         window = self.app.pve_window()
+        window.session_variables['min_factions'].set('1')
         def find(widget, text):
             for child in widget.winfo_children():
                 if isinstance(child, gui.ttk.Button) and child.cget('text') == text:
@@ -292,6 +392,7 @@ class LocalizedGuiTests(unittest.TestCase):
         import faction_options
         with patch.object(faction_options, 'suggest_factions', return_value=['Izumo Heavy Industries Ltd']):
             window = self.app.pve_window()
+            window.session_variables['min_factions'].set('1')
             self.assertEqual(len(window.faction_boxes), 3)
             box = window.faction_boxes['source_controller']
             variable = window.session_variables['source_controller']
@@ -317,6 +418,7 @@ class LocalizedGuiTests(unittest.TestCase):
         choices = ['Izumo Heavy Industries Ltd', 'Izumo Other Party']
         with patch.object(faction_options, 'suggest_factions', return_value=choices) as lookup:
             window = self.app.pve_window()
+            window.session_variables['min_factions'].set('1')
             box = window.faction_boxes['source_controller']
             window.deiconify()
             window.lift()

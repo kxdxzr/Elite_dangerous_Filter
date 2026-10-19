@@ -14,10 +14,14 @@ class Criteria:
     jump_range: float
     max_extra_jumps: int
     conditions: list
+    landing_pad: str = ''
+    pledged_power: str = ''
+    assume_max_rank: bool = True
 
 
 def build_criteria(origin, destination, jump_range, arrival_ls, module,
-                   ignore_carriers=True, max_extra_jumps=1, ignore_planetary=False):
+                   ignore_carriers=True, max_extra_jumps=1, ignore_planetary=False, landing_pad='',
+                   pledged_power='', assume_max_rank=True):
     origin, destination = origin.strip(), destination.strip()
     if not origin or not destination:
         raise ValueError('请填写出发星系和工程师星系')
@@ -34,6 +38,15 @@ def build_criteria(origin, destination, jump_range, arrival_ls, module,
     if isinstance(max_extra_jumps, bool) or not extra_text.isascii() or not extra_text.isdigit():
         raise ValueError('最多额外跳数须为非负整数')
     max_extra_jumps = int(max_extra_jumps)
+    if not isinstance(landing_pad, str) or landing_pad.strip() not in ('', '不限', 'S', 'M', 'L'):
+        raise ValueError('停机坪请选择不限、S、M或L')
+    landing_pad = landing_pad.strip()
+    if landing_pad == '不限':
+        landing_pad = ''
+    from powerplay_tool import normalize_power
+    pledged_power = '' if pledged_power in ('', '无') else normalize_power(pledged_power)
+    if not isinstance(assume_max_rank, bool):
+        raise ValueError('满级优惠选项须为布尔值')
     modules = [module] if isinstance(module, dict) else module
     if not isinstance(modules, list) or not modules:
         raise ValueError('请至少添加一项采购模组／舰载武器')
@@ -56,8 +69,31 @@ def build_criteria(origin, destination, jump_range, arrival_ls, module,
         conditions.append(dict(type='field', field='type', op='not in', values=['Drake-Class Carrier']))
     if ignore_planetary:
         conditions.append(dict(type='field', field='is_planetary', op='false'))
+    for condition in conditions:
+        # Never inherit a stale personal bonus from imported purchase conditions.
+        condition.pop('personal_power', None)
+        if condition.get('field') == 'modules' and pledged_power and assume_max_rank:
+            condition['personal_power'] = pledged_power
     return Criteria(origin, destination, jump_range, max_extra_jumps,
-                    eng.normalize_conditions('stations', conditions))
+                    eng.normalize_conditions('stations', conditions), landing_pad,
+                    pledged_power, assume_max_rank)
+
+
+def confirmed_pad(row):
+    """Largest positively evidenced pad, not proof that an unknown larger pad is absent."""
+    if row.get('has_large_pad') is True:
+        return 'L'
+    for size, field in (('L', 'large_pads'), ('M', 'medium_pads'), ('S', 'small_pads')):
+        count = row.get(field)
+        if isinstance(count, bool):
+            continue
+        try:
+            count = float(count)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if math.isfinite(count) and count.is_integer() and count > 0:
+            return size
+    return None
 
 
 def estimated_jumps(distance, jump_range):
@@ -80,8 +116,12 @@ def search(criteria, want=100, max_pages=25, progress=None, stop=None):
     criteria = copy.deepcopy(criteria)
     conditions = criteria.conditions
     notes, corrections = [], []
+    if criteria.pledged_power and criteria.assume_max_rank:
+        notes.append('个人优惠按满级假设计算，未核验实际等级或结算价。')
     cancelled = lambda: stop is not None and stop.is_set()
-    result = dict(rows=[], conditions=conditions, total=0, scanned=0, notes=notes, stopped=False)
+    result = dict(rows=[], conditions=conditions, landing_pad=criteria.landing_pad,
+                  pledged_power=criteria.pledged_power, assume_max_rank=criteria.assume_max_rank,
+                  total=0, scanned=0, notes=notes, stopped=False)
     if cancelled():
         notes.append('已手动停止，尚未发送请求')
         result['stopped'] = True
@@ -110,6 +150,9 @@ def search(criteria, want=100, max_pages=25, progress=None, stop=None):
         conditions.append(dict(type='distance', ref_system=name, min_ly=None, max_ly=radius, mode='inside'))
 
     def on_route(row):
+        pad = confirmed_pad(row)
+        if criteria.landing_pad and (pad is None or 'SML'.index(pad) < 'SML'.index(criteria.landing_pad)):
+            return False
         point = eng.result_coords('stations', row)
         if point is None or not all(math.isfinite(value) for value in point):
             return False
@@ -151,6 +194,9 @@ def export_table(result, language, tr):
 
     headers, records = station_table(result['rows'] if result else [], 'stations',
                                      result['conditions'] if result else [], language, tr)
+    headers.append('Confirmed landing pad' if language == 'en' else '已确认停机坪')
+    for row, record in zip(result['rows'] if result else [], records):
+        record.append(confirmed_pad(row) or tr('情况未知'))
     columns = (('direct_jumps', '直达估算跳数', 'Estimated direct jumps'),
                ('origin_jumps', '到采购点估算跳数', 'Estimated jumps to shop'),
                ('destination_jumps', '到工程师估算跳数', 'Estimated jumps to engineer'),

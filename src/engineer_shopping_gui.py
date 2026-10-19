@@ -10,6 +10,7 @@ import engineer_shopping as tool
 from engineer_destinations import CHOICES, destination_choice
 from export_metadata import write_csv_provenance
 from localized_tk import ttk, messagebox, Toplevel
+from powerplay_tool import POWERS, POWER_LABELS, normalize_power
 
 
 def open_window(app):
@@ -18,17 +19,23 @@ def open_window(app):
     win = Toplevel(app.root)
     win.title('工程师途中采购')
     win.geometry('1320x820')
+    from form_scroll import settings_form
+    form = settings_form(win)
     variables = {key: tk.StringVar(win, value=value) for key, value in dict(
-        origin='', destination='', jump_range='80', max_extra_jumps='1', arrival_ls='1500', want='100', max_pages='25').items()}
+        origin='', destination='', jump_range='80', max_extra_jumps='1', arrival_ls='1500', want='100',
+        max_pages='25', landing_pad='不限', pledged_power='无').items()}
+    variables['assume_max_rank'] = tk.BooleanVar(win, value=True)
     variables['ignore_carriers'] = tk.BooleanVar(win, value=True)
     variables['ignore_planetary'] = tk.BooleanVar(win, value=False)
     variables['purchases'] = tk.StringVar(win, value='')
-    route = ttk.LabelFrame(win, text='行程与航程', padding=8)
+    route = ttk.LabelFrame(form, text='行程与航程', padding=8)
     route.pack(fill='x', padx=8, pady=6)
     for index, (key, title) in enumerate((('origin', '出发星系'), ('destination', '目标工程师／星系'),
                                          ('jump_range', '单跳航程 ly'), ('arrival_ls', '到站距离小于 ls'),
                                          ('max_extra_jumps', '最多额外跳数（估算）'),
-                                         ('want', '最多结果'), ('max_pages', '最多页数'))):
+                                         ('want', '最多结果'), ('max_pages', '最多页数'),
+                                         ('landing_pad', '采购站停机坪（可停靠船型）'),
+                                         ('pledged_power', '效忠 Power（个人优惠）'))):
         grid_row, grid_column = divmod(index, 4)
         ttk.Label(route, text=title).grid(row=grid_row * 2, column=grid_column, sticky='w', padx=4)
         if key == 'destination':
@@ -37,12 +44,20 @@ def open_window(app):
         elif key == 'origin':
             entry = ttk.Combobox(route, textvariable=variables[key], width=24)
             attach_system_suggest(entry, variables[key])
+        elif key == 'pledged_power':
+            entry = ttk.Combobox(route, textvariable=variables[key],
+                                 values=['无'] + [POWER_LABELS[p] for p in POWERS], state='readonly', width=26)
+            win.pledged_power_box = entry
+        elif key == 'landing_pad':
+            entry = ttk.Combobox(route, textvariable=variables[key], values=['不限', 'S', 'M', 'L'],
+                                 state='readonly', width=12)
+            win.landing_pad_box = entry
         else:
             entry = ttk.Entry(route, textvariable=variables[key], width=12)
         entry.grid(row=grid_row * 2 + 1, column=grid_column, sticky='ew', padx=4, pady=4)
         route.columnconfigure(grid_column, weight=1)
 
-    purchase = ttk.LabelFrame(win, text='采购模组／舰载武器', padding=5)
+    purchase = ttk.LabelFrame(form, text='采购模组／舰载武器', padding=5)
     purchase.pack(fill='x', padx=8, pady=4)
     purchase_actions = ttk.Frame(purchase)
     purchase_actions.pack(fill='x')
@@ -110,6 +125,13 @@ def open_window(app):
     first = add_purchase()
     app.bind_tool_state('engineer_shopping', win, variables, before_collect=snapshot_purchases)
     variables['destination'].set(destination_choice(variables['destination'].get()))
+    if variables['landing_pad'].get() not in ('不限', 'S', 'M', 'L'):
+        variables['landing_pad'].set('不限')
+    if variables['pledged_power'].get() != '无':
+        try:
+            variables['pledged_power'].set(POWER_LABELS[normalize_power(variables['pledged_power'].get())])
+        except ValueError:
+            variables['pledged_power'].set('无')
     # Restore the full list, or migrate the old single-entry parameter set.
     try:
         saved_purchases = json.loads(variables['purchases'].get())
@@ -126,12 +148,18 @@ def open_window(app):
         first.refresh_options()
     ttk.Button(purchase_actions, text='添加采购项', command=add_purchase).pack(side='left', padx=4, pady=3)
     ttk.Label(purchase_actions, text='同一站点须同时满足全部采购项；同一行多选名称也要求全部有货。').pack(side='left', padx=6)
-    ttk.Label(win, text='前往工程师途中，寻找少绕路的模组／舰载武器售卖点，可筛选已知折扣。',
+    ttk.Label(form, text='前往工程师途中，寻找少绕路的模组／舰载武器售卖点，可筛选已知折扣。',
               wraplength=1280).pack(fill='x', padx=12)
-    ttk.Label(win, text='自动覆盖单跳和多跳；额外跳数相对直达估算。未验证实际航线，排序仅针对已取回的命中。',
+    ttk.Label(form, text='自动覆盖单跳和多跳；额外跳数相对直达估算。未验证实际航线，排序仅针对已取回的命中。',
               wraplength=1280, style='Muted.TLabel').pack(fill='x', padx=12)
-    ttk.Label(win, text='每项独立选择规格、折扣和新鲜度；到站距离留空不限，不核实购买数量。',
-              style='Muted.TLabel').pack(fill='x', padx=12)
+    ttk.Label(form, text='每项独立选择规格、折扣和新鲜度；到站距离留空不限，不核实购买数量。',
+               style='Muted.TLabel').pack(fill='x', padx=12)
+    ttk.Checkbutton(form, text='按满级个人优惠计算（默认）',
+                    variable=variables['assume_max_rank']).pack(anchor='w', padx=12)
+    win.personal_discount_note = ttk.Label(form,
+        text='选择效忠 Power 后假设已解锁最高等级奖励，未读取实际等级；仅限本势力领地内适用武器，不与公共优惠相加，航母不计入。',
+        wraplength=1250, style='Muted.TLabel')
+    win.personal_discount_note.pack(fill='x', padx=12)
 
     actions = ttk.Frame(win, padding=8)
     actions.pack(fill='x')
@@ -161,7 +189,10 @@ def open_window(app):
                                            [row.to_cond() for row in purchase_rows],
                                            ignore_carriers=variables['ignore_carriers'].get(),
                                            max_extra_jumps=variables['max_extra_jumps'].get(),
-                                           ignore_planetary=variables['ignore_planetary'].get())
+                                           ignore_planetary=variables['ignore_planetary'].get(),
+                                           landing_pad=variables['landing_pad'].get(),
+                                           pledged_power=variables['pledged_power'].get(),
+                                           assume_max_rank=variables['assume_max_rank'].get())
         want, pages = int(variables['want'].get()), int(variables['max_pages'].get())
         if want < 1 or pages < 1:
             raise ValueError('结果数和页数必须大于零，每页数量必须在 1~500 之间')

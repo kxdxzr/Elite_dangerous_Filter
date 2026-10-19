@@ -6,6 +6,26 @@ from station_discounts import discount_info
 
 
 class StationDiscountTests(unittest.TestCase):
+    def test_max_rank_personal_weapon_bonus_is_opt_in_and_separate_from_public(self):
+        laser = dict(name='Beam Laser', category='hardpoint', weapon_mode='Fixed')
+        for power, percent in (('A. Lavigny-Duval', 30), ('Arissa Lavigny-Duval', 30),
+                               ('Denton Patreus', 40), ('Jerome Archer', 30), ('Yuri Grom', 30)):
+            for state in ('Exploited', 'Fortified', 'Stronghold'):
+                row = dict(system_controlling_power=power, system_power_state=state)
+                with self.subTest(power=power, state=state):
+                    self.assertIsNone(discount_info(row, laser, 'modules')['percent'])
+                    info = discount_info(row, laser, 'modules', power)
+                    self.assertEqual(info['percent'], percent)
+                    self.assertIn('assumed max-rank', info['source'])
+                    for changes in (dict(type='Drake-Class Carrier'), dict(system_power_state=''),
+                                    dict(system_controlling_power='Li Yong-Rui', system_power_state='Exploited')):
+                        self.assertIsNone(discount_info(dict(row, **changes), laser, 'modules', power)['percent'])
+                    for item in (dict(name='Cargo Rack'), dict(laser, name='Mining Laser'),
+                                 dict(name='Beam Laser')):
+                        self.assertIsNone(discount_info(row, item, 'modules', power)['percent'])
+        row = dict(system_controlling_power='Arissa Lavigny-Duval', system_power_state='Fortified')
+        self.assertEqual(discount_info(row, laser, 'modules', 'A. Lavigny-Duval')['percent'], 30)
+
     def test_lyr_requires_controlling_power_and_supported_state(self):
         item = dict(name='Anaconda')
         row = dict(system_controlling_power='Li Yong-Rui', system_power_state='Fortified')
@@ -25,6 +45,16 @@ class StationDiscountTests(unittest.TestCase):
         self.assertEqual(discount_info(irkutsk, dict(name='Asp Explorer'), 'ships')['percent'], 20)
         self.assertIsNone(discount_info(irkutsk, dict(name='Anaconda'), 'ships')['discounted'])
 
+    def test_mahon_standard_goods_only_in_fortified_and_stronghold(self):
+        for state in ('Exploited', 'Fortified', 'Stronghold', ''):
+            row = dict(system_controlling_power='Edmund Mahon', system_power_state=state)
+            for name in ('Cargo Rack', 'Hull Reinforcement Package',
+                         'Guardian Hull Reinforcement Package', 'Guardian Shield Reinforcement Package'):
+                with self.subTest(state=state, name=name):
+                    info = discount_info(row, dict(name=name), 'modules')
+                    expected = 20 if state in ('Fortified', 'Stronghold') and not name.startswith('Guardian') else None
+                    self.assertEqual(info['percent'], expected)
+
     def test_product_discount_and_module_specs_must_match_same_item(self):
         row = dict(system_controlling_power='Edmund Mahon', system_power_state='Fortified', modules=[
             dict(name='Cargo Rack', **{'class': 4, 'rating': 'E'}),
@@ -35,11 +65,20 @@ class StationDiscountTests(unittest.TestCase):
         self.assertTrue(eng.match_field('stations', row, dict(condition, **{'class': [4]})))
         self.assertFalse(eng.match_field('stations', row, dict(condition, values=['Fuel Scoop'])))
 
-    def test_jerome_weapons_and_attilius_size_mount_limits(self):
-        row = dict(system_controlling_power='Jerome Archer', system_power_state='Stronghold')
+    def test_archer_discount_is_inactive_but_independent_station_rules_apply(self):
         laser = dict(name='Beam Laser', category='hardpoint', weapon_mode='Fixed', **{'class': 2})
-        self.assertEqual(discount_info(row, laser, 'modules')['percent'], 20)
-        self.assertIsNone(discount_info(row, dict(laser, name='Mining Laser'), 'modules')['discounted'])
+        for state in ('Exploited', 'Fortified', 'Stronghold'):
+            row = dict(system_controlling_power='Jerome Archer', system_power_state=state, modules=[laser])
+            with self.subTest(state=state):
+                self.assertIsNone(discount_info(row, laser, 'modules')['discounted'])
+                self.assertFalse(eng.match_field('stations', row,
+                    dict(field='modules', op='in', values=['Beam Laser'], discounted=True)))
+                station = dict(row, system_name='CD-43 11917', name='Attilius Orbital')
+                info = discount_info(station, laser, 'modules')
+                self.assertEqual((info['percent'], info['source']), (30, 'Attilius Orbital'))
+
+    def test_attilius_size_mount_limits(self):
+        laser = dict(name='Beam Laser', category='hardpoint', weapon_mode='Fixed', **{'class': 2})
         row = dict(system_name='CD-43 11917', name='Attilius Orbital')
         self.assertEqual(discount_info(row, laser, 'modules')['percent'], 30)
         self.assertIsNone(discount_info(row, dict(laser, **{'class': 3}), 'modules')['discounted'])
@@ -49,6 +88,16 @@ class StationDiscountTests(unittest.TestCase):
         condition = dict(field='ships', op='in', values=['Anaconda'], discounted=True)
         self.assertFalse(eng.match_candidate('stations', dict(name='Jameson Memorial', system_name='Shinrarta Dezhra'),
             [condition], {}, {'ships': [{'name': {'value': ['Anaconda']}}]}, set()))
+
+    def test_wiki_expired_sales_and_personal_bonus_are_not_inferred(self):
+        for system, station, field, name in (
+                ('Lembava', 'Station', 'modules', 'Frame Shift Drive'),
+                ('LFT 37', 'Onnes Gateway', 'modules', 'Fuel Scoop'),
+                ('LTT 198', 'Torval Orbital', 'modules', 'Mining Laser'),
+                ('Other', 'Other', 'ships', 'Anaconda')):
+            with self.subTest(system=system, station=station):
+                info = discount_info(dict(system_name=system, name=station), dict(name=name), field)
+                self.assertIsNone(info['discounted'])
 
     def test_validation_payload_and_legacy_no_becomes_any(self):
         condition = dict(field='ships', op='=', text='Anaconda', discounted=True)
