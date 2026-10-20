@@ -1,11 +1,28 @@
 import gc
+import csv
+from datetime import datetime, timezone
 import os
 import sys
 import time
+import tempfile
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
 import full_outfitting as tool
+import outfitting_snapshot
+
+
+class CacheAgeTextTests(unittest.TestCase):
+    def test_days_are_elapsed_24_hour_periods_not_file_modification_time(self):
+        from full_outfitting_gui import cache_age_text
+        now = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
+        self.assertEqual(cache_age_text('2026-10-17T12:00:00Z', now=now), '缓存于（3）天之前')
+        self.assertEqual(cache_age_text('2026-10-20T08:00:00+00:00', now=now), '缓存于（0）天之前')
+        self.assertEqual(cache_age_text('2026-10-18T20:00:00+08:00', now=now), '缓存于（2）天之前')
+        self.assertEqual(cache_age_text(None, now=now), '暂无缓存')
+        self.assertEqual(cache_age_text('bad', now=now), '缓存时间无效，请更新数据')
+        self.assertEqual(cache_age_text('2026-10-17T12:00:00', now=now), '缓存时间无效，请更新数据')
 
 
 @unittest.skipUnless(sys.platform == 'win32' or os.environ.get('DISPLAY'), 'Requires a GUI display')
@@ -41,13 +58,20 @@ class FullOutfittingGuiTests(unittest.TestCase):
         self.assertFalse(criteria.neutral_ships)
         self.assertFalse(criteria.special_equipment)
         self.assertFalse(criteria.require_discount)
+        self.assertFalse(criteria.ax_weapons)
+        self.assertFalse(criteria.universal_limpets)
+        self.assertEqual(win.cache_notice_font.actual('weight'), 'bold')
+        self.assertIsNot(win.cache_age_label.master, win)
+        self.assertIn('首次扫描需要建立缓存', str(win.cache_notice['text']))
         self.assertEqual(str(win.other_discount_box['state']), 'disabled')
         win.session_variables['neutral_ships'].set(True)
         win.session_variables['guardian'].set(True)
         win.session_variables['special_equipment'].set(True)
+        win.session_variables['universal_limpets'].set(True)
         before = win.criteria()
         self.app.set_language('en')
-        self.assertEqual(win.title(), 'Full-outfitting discount station finder')
+        self.assertIn('The first scan builds the cache', str(win.cache_notice['text']))
+        self.assertEqual(win.title(), 'Find fully outfitted stations')
         self.assertEqual(win.criteria(), before)
         self.app._tool_states['full_outfitting'] = self.app._state_dict()['tools']['full_outfitting']
         win.destroy()
@@ -61,7 +85,7 @@ class FullOutfittingGuiTests(unittest.TestCase):
                                          discount_max=10, sources=['Jameson Memorial']))
         result = dict(rows=[row], diagnostics=[], notes=[], scanned=1, stopped=False,
                       catalog_revision='test')
-        with patch.object(tool, 'search', return_value=result):
+        with patch.object(outfitting_snapshot, 'search', return_value=result):
             win.run_search()
             until = time.monotonic() + 3
             while win.search_state['busy'] and time.monotonic() < until:
@@ -76,6 +100,59 @@ class FullOutfittingGuiTests(unittest.TestCase):
         self.root.update()
         self.assertGreater(win.result_tree.winfo_height(), 100)
 
+    def test_catalog_update_confirmation_does_not_mutate_existing_results(self):
+        win = self.app.full_outfitting_window()
+        snapshot = dict(rows=[], diagnostics=[], notes=[], scanned=0, catalog_revision='old')
+        win.search_state['result'] = snapshot
+        with patch('catalog_updates.check', return_value=dict(version='2026.10.20.1', summary='test')), \
+                patch('catalog_updates.read_package', return_value=None), \
+                patch('full_outfitting_gui.messagebox.askyesno', return_value=False) as confirm, \
+                patch('catalog_updates.install') as install:
+            win.update_catalog()
+            until = time.monotonic() + 3
+            while win.search_state['updating'] and time.monotonic() < until:
+                self.root.update()
+                time.sleep(.01)
+            confirm.assert_called_once()
+            install.assert_not_called()
+        self.assertIs(win.search_state['result'], snapshot)
+        self.assertFalse(win.search_state['updating'])
+
+    def test_csv_preamble_uses_search_snapshot_not_edited_form(self):
+        win = self.app.full_outfitting_window()
+        row = dict(name='Station', system_name='Sol', _full_outfitting=dict(
+            present=1, required=1, discount_min=15, discount_max=15, sources=['Li Yong-Rui']))
+        win.search_state['result'] = dict(rows=[row], criteria=vars(tool.build_criteria('Sol', 500)),
+                                          search_limits=dict(want=50, max_pages=25))
+        win.session_variables['reference'].set('Achenar')
+        win.session_variables['radius'].set('100')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'result.csv'
+            with patch('full_outfitting_gui.filedialog.asksaveasfilename', return_value=str(path)):
+                win.export_csv()
+            with path.open(encoding='utf-8-sig', newline='') as file:
+                rows = list(csv.reader(file))
+        self.assertEqual(rows[5][0], '# 检索条件')
+        self.assertIn('参考星系: Sol', rows[5][1])
+        self.assertIn('检索半径 ly: 500', rows[5][1])
+        self.assertNotIn('Achenar', rows[5][1])
+        self.assertEqual(rows[6], [])
+        self.assertEqual(rows[7][0], '星系')
+
+    def test_failed_data_update_keeps_previous_displayed_result(self):
+        win = self.app.full_outfitting_window()
+        previous = dict(rows=[], catalog_revision='previous')
+        win.search_state['result'] = previous
+        with patch.object(outfitting_snapshot, 'search', side_effect=ValueError('Update incomplete')), \
+                patch('full_outfitting_gui.messagebox.showerror') as error:
+            win.run_search(True)
+            until = time.monotonic() + 3
+            while win.search_state['busy'] and time.monotonic() < until:
+                self.root.update()
+                time.sleep(.01)
+            error.assert_called_once()
+        self.assertIs(win.search_state['result'], previous)
+
     def test_partial_http_failure_keeps_rows_and_export_requires_confirmation(self):
         win = self.app.full_outfitting_window()
         row = dict(name='Station', system_name='Sol', _full_outfitting=dict(
@@ -83,7 +160,7 @@ class FullOutfittingGuiTests(unittest.TestCase):
         result = dict(rows=[row], diagnostics=[], notes=[], scanned=1, partial=True,
                       complete=False, errors=[dict(source='LYR 15%', page=2, message='HTTP Error 500')],
                       catalog_revision='test')
-        with patch.object(tool, 'search', return_value=result), \
+        with patch.object(outfitting_snapshot, 'search', return_value=result), \
                 patch('full_outfitting_gui.messagebox.showerror') as error:
             win.run_search()
             until = time.monotonic() + 3
@@ -106,7 +183,7 @@ class FullOutfittingGuiTests(unittest.TestCase):
                                          discount_max=10, sources=['Jameson Memorial']))
         result = dict(rows=[row], diagnostics=[], notes=[], scanned=1, partial=False,
                       complete=True, errors=[], catalog_revision='test')
-        with patch.object(tool, 'search', return_value=result):
+        with patch.object(outfitting_snapshot, 'search', return_value=result):
             win.run_search()
             until = time.monotonic() + 3
             while win.search_state['busy'] and time.monotonic() < until:

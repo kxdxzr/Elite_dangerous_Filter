@@ -24,6 +24,16 @@ def assert_provenance(test, rows, width):
 
 
 class ExportMetadataTests(unittest.TestCase):
+    def test_search_conditions_are_last_preamble_row_before_separator(self):
+        output = io.StringIO(newline='')
+        writer = csv.writer(output)
+        metadata.write_csv_provenance(writer, 5, 'en', search_conditions='Reference: Sol; Radius: 500')
+        writer.writerow(['result'] * 5)
+        rows = list(csv.reader(io.StringIO(output.getvalue())))
+        self.assertEqual(rows[5], ['# Search conditions', 'Reference: Sol; Radius: 500', '', '', ''])
+        self.assertEqual(rows[6], [])
+        self.assertEqual(rows[7], ['result'] * 5)
+
     def test_provenance_language_is_english_or_chinese_not_bilingual(self):
         for language in ('en', 'zh'):
             with self.subTest(language=language):

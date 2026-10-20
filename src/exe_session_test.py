@@ -15,7 +15,8 @@ ROWS = [
 TOOLS = {
     'full_outfitting': dict(reference='Sirius', radius='180', want='12', max_pages='3',
                            other_discounts=True, neutral_ships=True, federal_ships=False,
-                           imperial_ships=True, guardian=True, special_equipment=True, require_discount=True),
+                           imperial_ships=True, guardian=True, special_equipment=True, require_discount=True, ax_weapons=True,
+                           universal_limpets=True),
     "rare_goods": dict(reference="Leesti", minimum="205", maximum="219", pages="9",
                         query="Azure", power="Yuri Grom", all_powers=True, neutron_only=False),
     "carrier_parking": dict(reference="Lave", radius="45", pages="7",

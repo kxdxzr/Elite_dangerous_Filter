@@ -52,6 +52,8 @@ def discount_info(row, item, field, personal_power=''):
     if not name:
         return unknown
     system, station = key(row.get('system_name', '')), key(row.get('name', ''))
+    if public_surcharge(row) and field in ('ships', 'modules'):
+        return dict(discounted=False, percent=None, surcharge=20, source='i Sola Prospect')
     power = key(row.get('system_controlling_power', ''))
     state = key(row.get('system_power_state', ''))
     rules = []
@@ -110,3 +112,9 @@ def discount_info(row, item, field, personal_power=''):
                     key('Heatsink Launcher')} or mode in ('fixed', 'gimbal', 'gimballed')):
                 add(30, 'Attilius Orbital')
     return max(rules, key=lambda rule: rule['percent']) if rules else unknown
+
+
+def public_surcharge(row):
+    """Known station-wide markup, not a negative discount or a Power bonus."""
+    return 20 if (key(row.get('system_name')), key(row.get('name'))) == (
+        key('Brestla'), key('i Sola Prospect')) else None

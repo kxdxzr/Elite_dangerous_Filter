@@ -97,6 +97,8 @@ class OutfittingIdentityTests(unittest.TestCase):
                         system_power_state='Fortified')}
 
         def http(url, payload=None):
+            if 'spansh.co.uk' in url:
+                return dict(results=[])
             market = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)['marketId'][0]
             row = stations[market]
             return dict(marketId=int(market), name=row['system_name'], sName=row['name'],
@@ -112,6 +114,6 @@ class OutfittingIdentityTests(unittest.TestCase):
         with patch.object(engine, 'search', side_effect=search), patch.object(engine, '_http_json', side_effect=http) as fetch:
             result = tool.search(tool.build_criteria('Sol', 500, other_discounts=True, require_discount=True), catalog=data)
         self.assertEqual(len(result['rows']), 2)
-        self.assertEqual(fetch.call_count, 2)
+        self.assertEqual(sum('edsm.net' in call.args[0] for call in fetch.call_args_list), 2)
         self.assertTrue(all(row['_full_outfitting']['matched'] for row in result['rows']))
         self.assertTrue(all('EDSM（未提供库存时间）' in row['_stock_sources'] for row in result['rows']))

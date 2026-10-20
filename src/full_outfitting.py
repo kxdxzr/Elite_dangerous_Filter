@@ -8,7 +8,7 @@ import urllib.error
 import filter_engine as eng
 import outfitting_catalog as catalogue
 import outfitting_identity as identity
-from station_discounts import ALL_MODULE_PUBLIC_STATIONS, discount_info, key
+from station_discounts import ALL_MODULE_PUBLIC_STATIONS, discount_info, key, public_surcharge
 
 
 @dataclass(frozen=True)
@@ -22,6 +22,8 @@ class Criteria:
     guardian: bool = False
     special_equipment: bool = False
     require_discount: bool = False
+    ax_weapons: bool = False
+    universal_limpets: bool = False
 
 
 def build_criteria(reference, radius, **options):
@@ -70,10 +72,64 @@ def excluded_station(row):
             or 'stronghold carrier' in str(row.get('name', '')).casefold())
 
 
+def complete_result_metadata(row, criteria, http, contexts=None, notes=None):
+    """Fill presentation fields from exact Spansh identities; never merge stock.
+
+    Metadata failure must not remove a stock-verified hit. Inventory timestamps
+    remain attached to the inventory actually checked, not a newer response.
+    """
+    contexts = contexts if contexts is not None else {}
+    notes = notes if notes is not None else []
+    system = row.get('system_name')
+    if not system:
+        notes.append('结果缺少星系名称，无法补全资料')
+        return
+    try:
+        if not contexts.get(system):
+            response = http('https://spansh.co.uk/api/systems/search', dict(
+                filters={'name': {'value': system}}, size=10, page=0,
+                reference_system=criteria.reference))
+            contexts[system] = next((item for item in response.get('results', [])
+                                    if str(item.get('name', '')).strip().casefold() == str(system).strip().casefold()
+                                    and (not row.get('system_id64') or
+                                         str(item.get('id64') or item.get('id')) == str(row['system_id64']))), {})
+        context = contexts[system]
+        for target, source in (('needs_permit', 'needs_permit'),
+                               ('system_controlling_power', 'controlling_power'),
+                               ('system_power_state', 'power_state')):
+            if row.get(target) in (None, '') and context.get(source) not in (None, ''):
+                row[target] = context[source]
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        notes.append(f"{system} / 结果星系资料补全失败: {exc}")
+    fields = ('distance', 'distance_to_arrival', 'technology_broker', 'services')
+    if not any(row.get(field) in (None, '') for field in fields) and row.get('outfitting_updated_at'):
+        return
+    try:
+        response = http('https://spansh.co.uk/api/stations/search', dict(
+            filters={'name': {'value': row.get('name')}, 'system_name': {'value': system}},
+            size=10, page=0, reference_system=criteria.reference))
+        market = row.get('market_id') or row.get('id')
+        station = next((item for item in response.get('results', [])
+                        if str(item.get('name', '')).strip().casefold() == str(row.get('name', '')).strip().casefold()
+                        and str(item.get('system_name', '')).strip().casefold() == str(system).strip().casefold()
+                        and (not market or str(item.get('market_id') or item.get('id')) == str(market))), {})
+        for field in fields:
+            if row.get(field) in (None, '') and station.get(field) not in (None, ''):
+                row[field] = copy.deepcopy(station[field])
+        # A timestamp can be backfilled only if the associated stock snapshot
+        # is exactly the same. Do not re-date old Spansh or EDSM evidence.
+        if (not row.get('outfitting_updated_at') and row.get('modules')
+                and row.get('modules') == station.get('modules')):
+            row['outfitting_updated_at'] = station.get('outfitting_updated_at')
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        notes.append(f"{system} / {row.get('name')} / 结果站点资料补全失败: {exc}")
+
+
 def check_station(row, criteria, catalog):
     """Return evidence and all failures. Missing data never qualifies a station."""
     problems, missing, no_discount, unknown = [], [], [], []
     result = dict(matched=False, missing=missing, no_discount=no_discount, problems=problems,
+                  surcharge=public_surcharge(row),
                   unknown=unknown, required=0, present=0, discount_min=None, discount_max=None, sources=[])
     if excluded_station(row):
         problems.append('排除航母或站点类型未知')
@@ -90,9 +146,20 @@ def check_station(row, criteria, catalog):
         problems.append('未确认同站 Guardian 科技经纪人')
     if problems:
         return result  # Cheap evidence checks precede the large inventory walk.
-    requirements = list(catalog.get('items', []))
+    requirements = [item for item in catalog.get('items', [])
+                    if not catalogue.excluded_hangar(item)
+                    and (criteria.universal_limpets or not catalogue.is_universal_limpet(item))
+                    and (criteria.ax_weapons or not catalogue.is_ax(item))]
+    if criteria.universal_limpets and not {(7, 'A'), (7, 'C')}.issubset(
+            {(item.get('class'), item.get('rating')) for item in requirements
+             if catalogue.is_universal_limpet(item)}):
+        problems.append('通用无人机控制器目录不完整，无法确认齐全')
+    if criteria.ax_weapons and not catalog.get('release_engine') and not catalogue.AX_EQUIPMENT.issubset(
+            {item.get('name') for item in requirements}):
+        problems.append('AX装备目录不完整，无法确认齐全')
     if criteria.special_equipment:
-        requirements.extend(catalog.get('special_items', []))
+        requirements.extend(item for item in catalog.get('special_items', [])
+                            if not catalogue.excluded_merc_spec(item))
         if catalog.get('special_issues') or not catalog.get('special_items'):
             problems.append('特殊装备目录不完整，无法确认齐全')
     if not requirements or catalog.get('issues'):
@@ -127,6 +194,8 @@ def check_station(row, criteria, catalog):
                     stock[inventory_key(item)] = item
                 by_symbol.setdefault(catalogue.symbol(item), []).append(item)
     percentages, sources, sale_items = [], set(), []
+    if result['surcharge']:
+        sources.add('i Sola Prospect')
     for item in requirements:
         expected = inventory_key(item)
         actual = stock.get(expected) if expected is not None else None
@@ -271,7 +340,8 @@ def search(criteria, want=100, max_pages=25, stop=None, progress=None, catalog=N
     result = dict(rows=[], diagnostics=[], notes=notes, scanned=0, total=0, rejected=0,
                   uncertain=0, identity_candidates=[], incomplete=0, condition_failures=0,
                   stopped=False, complete=False, partial=False, errors=[], sources=[],
-                  catalog_revision=catalogue.REVISION, criteria=vars(criteria).copy())
+                  catalog_revision=catalogue.REVISION, criteria=vars(criteria).copy(),
+                  search_limits=dict(want=want, max_pages=max_pages))
     stage, page = '配件目录', 1
     exhausted = True
 
@@ -301,8 +371,12 @@ def search(criteria, want=100, max_pages=25, stop=None, progress=None, catalog=N
             result['partial'] = True
             return result
         result.update(catalog_size=len(catalog['items']), catalog_built_at=catalog.get('built_at', ''),
+                      catalog_revision=catalog.get('release_version', catalogue.REVISION),
+                      catalog_sources=catalog.get('release_sources', []),
+                      catalog_rules_version=catalog.get('release_engine', 'bundled'),
                       identity_revision=catalog.get('identity_revision', ''),
-                      catalog_special_size=len(catalog.get('special_items', [])) if criteria.special_equipment else 0,
+                      catalog_special_size=sum(not catalogue.excluded_merc_spec(item)
+                                               for item in catalog.get('special_items', [])) if criteria.special_equipment else 0,
                       catalog_conflicts=catalog.get('conflicts', []),
                       catalog_shared_symbols=len(catalog.get('shared_symbols', [])),
                       special_issues=catalog.get('special_issues', []) if criteria.special_equipment else [],
@@ -310,7 +384,10 @@ def search(criteria, want=100, max_pages=25, stop=None, progress=None, catalog=N
         if catalog.get('module_facts'):
             notes.append('目录按数字物品ID去重，不要求工程师专售规格及限定科技配件。')
         contexts, seen = {}, set()
-        anchors = anchor_conditions(catalog)
+        anchors = anchor_conditions(dict(catalog, items=[item for item in catalog['items']
+                                    if (criteria.ax_weapons or not catalogue.is_ax(item))
+                                    and (criteria.universal_limpets or not catalogue.is_universal_limpet(item))
+                                    and not catalogue.excluded_hangar(item)]))
 
         def enrich_power(row):
             name = row.get('system_name')
@@ -401,8 +478,9 @@ def search(criteria, want=100, max_pages=25, stop=None, progress=None, catalog=N
                             evidence = check_station(row, criteria, catalog)
                     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
                         notes.append(f"{row.get('name')}: {exc}")
-                if evidence['matched'] and not criteria.require_discount:
-                    enrich_power(row)
+                if evidence['matched']:
+                    update(f"正在补全结果资料… {row.get('name', '')}")
+                    complete_result_metadata(row, criteria, http, contexts, notes)
                     evidence = check_station(row, criteria, catalog)
                 status = review_status(evidence, criteria)
                 evidence['review_status'] = status
@@ -469,7 +547,39 @@ COLUMNS = [('system_name', '星系'), ('name', '站点'), ('distance', '距离 l
            ('outfitting_updated_at', '配件库存更新时间'), ('catalog_revision', '目录事实版本'),
            ('catalog_built_at', '目录核验时间'), ('eligibility', '购买资格假设'), ('ship_requirements', '舰船条件'),
            ('search_status', '检索完整性'), ('special_requirements', '特殊装备条件'), ('stock_sources', '库存核验来源'),
-           ('identity_revision', '物品ID目录版本'), ('discount_requirement', '折扣要求')]
+            ('identity_revision', '物品ID目录版本'), ('discount_requirement', '折扣要求'),
+            ('ax_requirements', 'AX装备条件'), ('catalog_rules_version', '目录规则版本'),
+            ('catalog_sources', '目录事实来源'), ('universal_requirements', '通用无人机控制器条件'),
+            ('snapshot_created_at', '库存快照时间'), ('snapshot_scope_text', '库存快照范围')]
+
+
+def export_search_conditions(result, tr=lambda text: text):
+    """Describe the completed query, never the current editable GUI form."""
+    criteria = (result or {}).get('criteria')
+    if not criteria:
+        return tr('未记录检索条件')
+    limits = result.get('search_limits', {})
+    fields = [('参考星系', criteria.get('reference')), ('检索半径 ly', criteria.get('radius')),
+              ('最多结果', limits.get('want')), ('最多页数', limits.get('max_pages'))]
+    if result.get('snapshot_created_at'):
+        scope = result.get('snapshot_scope', {})
+        fields.extend([('库存快照时间', result['snapshot_created_at']),
+                       ('库存快照范围', f"{scope.get('reference', '')} / {scope.get('radius', '')} ly"),
+                       ('快照更新页数上限', result.get('snapshot_update_pages'))])
+    for field, label in (
+            ('require_discount', '必须全配件公共折扣'),
+            ('other_discounts', '包含其他全配件公共折扣站'),
+            ('ax_weapons', 'AX装备规格齐全'),
+            ('universal_limpets', '要求通用无人机控制器7A及7C'),
+            ('special_equipment', 'Merc Coins 特殊装备齐全（仅库存）'),
+            ('neutral_ships', '全部非势力船（含联盟）'),
+            ('federal_ships', '全部联邦船'), ('imperial_ships', '全部帝国船'),
+            ('guardian', '同站Guardian科技经纪人')):
+        value = tr('是' if criteria.get(field, False) else '否')
+        if field == 'other_discounts' and not criteria.get('require_discount'):
+            value = tr('不适用（未要求折扣）')
+        fields.append((label, value))
+    return '; '.join(f"{tr(label)}: {value if value is not None else tr('未记录')}" for label, value in fields)
 
 
 def export_table(result, tr=lambda text: text):
@@ -484,6 +594,9 @@ def export_table(result, tr=lambda text: text):
         total = evidence.get('discount_total', evidence.get('required', 0))
         discount_scope = tr('未确认公共折扣' if low is None else
                             '全配件有已知优惠' if covered == total else '部分配件有已知优惠')
+        if evidence.get('surcharge'):
+            discount = tr('公共加价') + f" {evidence['surcharge']}%"
+            discount_scope = tr('全配件公共加价')
         criteria = (result or {}).get('criteria', {})
         groups = [tr(label) for name, label in (('neutral_ships', '全部非势力船（含联盟）'),
                   ('federal_ships', '全部联邦船'), ('imperial_ships', '全部帝国船')) if criteria.get(name)]
@@ -491,17 +604,33 @@ def export_table(result, tr=lambda text: text):
                       distance_to_arrival=format_ls(row.get('distance_to_arrival')),
                       discount=discount, discount_scope=discount_scope,
                       sources='; '.join(evidence['sources']),
-                      guardian=tr('是' if has_guardian(row) else '否' if row.get('technology_broker') == 'Human' else '未知'),
+                       guardian=tr('是' if has_guardian(row) else '否' if row.get('technology_broker') == 'Human'
+                                   or isinstance(row.get('services'), list) and row['services']
+                                   and not any(key(item.get('name') if isinstance(item, dict) else item) == key('Technology Broker')
+                                               for item in row['services']) else 'Spansh未提供'),
                       ship_requirements='; '.join(groups) or '-',
-                      catalog_revision=(result or {}).get('catalog_revision', ''),
+                       catalog_revision=(result or {}).get('catalog_revision', ''),
+                       catalog_rules_version=(result or {}).get('catalog_rules_version', 'bundled'),
+                       catalog_sources='; '.join((result or {}).get('catalog_sources', [])),
+                       snapshot_created_at=(result or {}).get('snapshot_created_at', ''),
+                       snapshot_scope_text=(f"{result['snapshot_scope'].get('reference', '')} / "
+                                            f"{result['snapshot_scope'].get('radius', '')} ly"
+                                            if result.get('snapshot_scope') else ''),
                       identity_revision=(result or {}).get('identity_revision', ''),
                       catalog_built_at=(result or {}).get('catalog_built_at', ''),
                       eligibility=tr('默认已有全部 Power 配件购买资格'),
                       discount_requirement=tr('必须全配件公共折扣' if criteria.get('require_discount') else '不要求折扣'),
                       stock_sources='; '.join(tr(source) for source in row.get('_stock_sources', ['Spansh'])),
-                      special_requirements=tr('Merc Coins 特殊装备齐全（仅库存）' if criteria.get('special_equipment') else '不要求特殊装备'),
-                      search_status=tr('部分结果' if result.get('partial') else '候选分页已取完'),
+                       special_requirements=tr('Merc Coins 特殊装备齐全（仅库存）' if criteria.get('special_equipment') else '不要求特殊装备'),
+                       ax_requirements=tr('AX装备规格齐全' if criteria.get('ax_weapons') else '不要求AX装备'),
+                       universal_requirements=tr('要求通用无人机控制器7A及7C' if criteria.get('universal_limpets')
+                                                 else '不要求通用无人机控制器7A及7C'),
+                       search_status=tr('部分结果' if result.get('partial') else
+                                        '已有站点名单筛选完成' if result.get('snapshot_local') else '候选分页已取完'),
                       permit=tr('需许可' if row.get('needs_permit') is True else
-                                '免许可' if row.get('needs_permit') is False else '未知'))
+                                 '免许可' if row.get('needs_permit') is False else 'Spansh未提供'))
+        for field in ('distance', 'distance_to_arrival', 'outfitting_updated_at'):
+            if values.get(field) in (None, '', '-'):
+                values[field] = tr('Spansh未提供')
         records.append([values.get(field) if values.get(field) not in (None, '') else '-' for field, _ in COLUMNS])
     return headers, records

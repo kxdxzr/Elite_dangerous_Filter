@@ -11,6 +11,9 @@ import filter_engine as engine
 
 class FullOutfittingTests(unittest.TestCase):
     def setUp(self):
+        network = patch.object(engine, '_http_json', return_value=dict(results=[]))
+        network.start()
+        self.addCleanup(network.stop)
         self.items = [dict(name='Beam Laser', ed_symbol=f'beam_{mount}',
                            **{'class': 1, 'rating': 'E'}, category='hardpoint', weapon_mode=mount)
                       for mount in ('Fixed', 'Gimballed', 'Turreted')]
@@ -26,6 +29,142 @@ class FullOutfittingTests(unittest.TestCase):
     def check(self, **options):
         options.setdefault('require_discount', True)
         return tool.check_station(self.row, tool.build_criteria('Sol', 100, **options), self.catalog)
+
+    def test_ax_equipment_is_optional_without_excluding_mining_equipment(self):
+        ax = [dict(name=name, ed_symbol=f'ax_{index}', **{'class': 2, 'rating': 'B'})
+              for index, name in enumerate(sorted(catalog.AX_EQUIPMENT))]
+        scanner = dict(name='Sub-Surface Displacement Missile', ed_symbol='mining_displacement', **{'class': 2, 'rating': 'B'})
+        data = dict(self.catalog, items=[*self.items, scanner, *ax])
+        row = dict(self.row, modules=[*self.row['modules'], scanner])
+        criteria = tool.build_criteria('Sol', 100)
+        before = copy.deepcopy(data)
+        result = tool.check_station(row, criteria, data)
+        self.assertTrue(result['matched'])
+        self.assertEqual(result['required'], len(self.items) + 1)
+        self.assertEqual(data, before)
+        enabled = tool.build_criteria('Sol', 100, ax_weapons=True)
+        self.assertEqual(len(tool.check_station(row, enabled, data)['missing']), len(catalog.AX_EQUIPMENT))
+        row['modules'] = [*row['modules'], *ax]
+        self.assertTrue(tool.check_station(row, enabled, data)['matched'])
+        row['modules'] = [item for item in row['modules'] if item is not scanner]
+        self.assertFalse(tool.check_station(row, criteria, data)['matched'])
+
+    def test_enabled_ax_requirement_fails_closed_on_missing_catalogue_family(self):
+        evidence = tool.check_station(self.row, tool.build_criteria('Sol', 100, ax_weapons=True), self.catalog)
+        self.assertFalse(evidence['matched'])
+        self.assertIn('AX装备目录不完整，无法确认齐全', evidence['problems'])
+
+    def test_free_hangars_not_required_but_paid_hangars_and_other_free_items_are(self):
+        paid = dict(name='Vessel Hangar', ed_symbol='int_fighterbay_size5_class1',
+                    **{'class': 5, 'rating': 'D'})
+        free = [dict(paid, ed_symbol=sym) for sym in (
+            'int_fighterbay_size5_class1_free', 'int_fighterbaymk2_size5_class1_free',
+            'int_largebuggybay_size2_class3_free', 'int_mkiilargebuggybay_size2_class3_free')]
+        other = dict(name='Cargo Rack', ed_symbol='int_cargorack_size2_class1_free',
+                     **{'class': 2, 'rating': 'E'})
+        data = dict(self.catalog, items=[*self.items, paid, other, *free])
+        row = dict(self.row, modules=[*self.items, paid, other])
+        evidence = tool.check_station(row, self.criteria, data)
+        self.assertTrue(evidence['matched'])
+        self.assertEqual(evidence['required'], len(self.items) + 2)
+        row['modules'] = self.items
+        evidence = tool.check_station(row, self.criteria, data)
+        self.assertEqual(len(evidence['missing']), 2)
+
+    def test_mkii_vessel_and_large_vehicle_hangars_excluded_but_standard_hangars_remain(self):
+        hangars = [dict(name=name, ed_symbol=sym, **{'class': 5, 'rating': 'D'}) for name, sym in (
+            ('Mk II Vessel Hangar', 'int_fighterbaymk2_size5_class1'),
+            ('Vessel Hangar', 'int_fighterbay_size5_class1'),
+            ('Planetary Vehicle Hangar', 'int_buggybay_size2_class1'),
+            ('Large Planetary Vehicle Hangar', 'int_largebuggybay_size2_class3'),
+            ('Mk II Large Planetary Vehicle Hangar', 'int_mkiilargebuggybay_size2_class3'))]
+        data = dict(self.catalog, items=[*self.items, *hangars])
+        row = dict(self.row, modules=[*self.items, *hangars[1:]])
+        evidence = tool.check_station(row, self.criteria, data)
+        self.assertTrue(evidence['matched'])
+        self.assertEqual(evidence['required'], len(self.items) + 2)
+        row['modules'] = self.items
+        self.assertEqual(len(tool.check_station(row, self.criteria, data)['missing']), 2)
+
+    def test_universal_controllers_optional_and_both_variants_required_when_enabled(self):
+        universal = [dict(name='Universal Multi Limpet Controller',
+                          ed_symbol=f'int_multidronecontrol_universal_size7_class{index}',
+                          **{'class': 7, 'rating': rating}) for index, rating in ((3, 'C'), (5, 'A'))]
+        other = dict(name='Collector Limpet Controller', ed_symbol='int_dronecontrol_collection_size3_class5',
+                     **{'class': 3, 'rating': 'A'})
+        data = dict(self.catalog, items=[*self.items, other, *universal])
+        row = dict(self.row, modules=[*self.items, other])
+        off = tool.build_criteria('Sol', 500)
+        on = tool.build_criteria('Sol', 500, universal_limpets=True)
+        self.assertTrue(tool.check_station(row, off, data)['matched'])
+        self.assertEqual(len(tool.check_station(row, on, data)['missing']), 2)
+        row['modules'].append(universal[0])
+        self.assertEqual(len(tool.check_station(row, on, data)['missing']), 1)
+        row['modules'].append(universal[1])
+        self.assertTrue(tool.check_station(row, on, data)['matched'])
+        row['modules'] = self.items
+        self.assertFalse(tool.check_station(row, off, data)['matched'])
+        broken = dict(data, items=[*self.items, universal[0]])
+        self.assertIn('通用无人机控制器目录不完整，无法确认齐全',
+                      tool.check_station(row, on, broken)['problems'])
+
+    def test_brestla_markup_is_explicit_and_never_a_discount(self):
+        row = dict(self.row, name='i Sola Prospect', system_name='Brestla')
+        criteria = tool.build_criteria('Sol', 500)
+        evidence = tool.check_station(row, criteria, self.catalog)
+        self.assertTrue(evidence['matched'])
+        self.assertEqual(evidence['surcharge'], 20)
+        self.assertIsNone(evidence['discount_min'])
+        self.assertEqual(evidence['discount_covered'], 0)
+        headers, records = tool.export_table(dict(rows=[dict(row, _full_outfitting=evidence)], criteria=vars(criteria)))
+        self.assertEqual(records[0][headers.index('公共折扣')], '公共加价 20%')
+        self.assertEqual(records[0][headers.index('已知优惠范围')], '全配件公共加价')
+        self.assertFalse(tool.check_station(row, self.criteria, self.catalog)['matched'])
+        other = dict(row, name='Other Station')
+        self.assertIsNone(tool.check_station(other, criteria, self.catalog)['surcharge'])
+
+    def test_result_metadata_backfills_permit_even_for_named_discount_station(self):
+        row = dict(self.row, name='Jameson Memorial', system_name='Shinrarta Dezhra', market_id=123,
+                   distance_to_arrival=0, outfitting_updated_at='original-time')
+        def http(url, payload):
+            if '/systems/' in url:
+                return dict(results=[dict(name='Shinrarta Dezhra', needs_permit=True)])
+            return dict(results=[dict(name='Jameson Memorial', system_name='Shinrarta Dezhra',
+                                     market_id=123, distance=64.4, distance_to_arrival=328,
+                                     technology_broker='Guardian', outfitting_updated_at='new-time')])
+        tool.complete_result_metadata(row, self.criteria, http)
+        self.assertIs(row['needs_permit'], True)
+        self.assertEqual(row['technology_broker'], 'Guardian')
+        self.assertEqual(row['distance'], 64.4)
+        self.assertEqual(row['distance_to_arrival'], 0)
+        self.assertEqual(row['outfitting_updated_at'], 'original-time')
+        row['_full_outfitting'] = tool.check_station(row, tool.build_criteria('Sol', 500, other_discounts=True), self.catalog)
+        headers, records = tool.export_table(dict(rows=[row]))
+        self.assertEqual(records[0][headers.index('许可')], '需许可')
+
+    def test_metadata_does_not_merge_wrong_market_or_false_values_or_re_date_stock(self):
+        row = dict(self.row, market_id=123, needs_permit=False)
+        before = copy.deepcopy(row['modules'])
+        def http(url, payload):
+            if '/systems/' in url:
+                return dict(results=[dict(name='Other', needs_permit=True)])
+            return dict(results=[dict(name=row['name'], system_name=row['system_name'],
+                                     market_id=124, technology_broker='Guardian', modules=before,
+                                     outfitting_updated_at='wrong-market-time')])
+        tool.complete_result_metadata(row, self.criteria, http)
+        self.assertIs(row['needs_permit'], False)
+        self.assertNotIn('technology_broker', row)
+        self.assertNotIn('outfitting_updated_at', row)
+        self.assertEqual(row['modules'], before)
+
+    def test_metadata_lookup_failure_keeps_inventory_and_records_diagnostic(self):
+        row = copy.deepcopy(self.row)
+        notes = []
+        def fail(*args):
+            raise TimeoutError('offline')
+        tool.complete_result_metadata(row, self.criteria, fail, notes=notes)
+        self.assertTrue(tool.check_station(row, self.criteria, self.catalog)['matched'])
+        self.assertEqual(len(notes), 2)
 
     def test_all_variants_same_station_and_no_inputs_modified(self):
         before = copy.deepcopy((self.row, self.catalog))
@@ -143,6 +282,19 @@ class FullOutfittingTests(unittest.TestCase):
         load.assert_not_called()
         self.assertTrue(result['stopped'])
 
+    def test_csv_conditions_include_query_limits_and_all_optional_requirements(self):
+        criteria = tool.build_criteria('Sol', 500, ax_weapons=True, universal_limpets=True,
+                                       other_discounts=True, neutral_ships=True, guardian=True)
+        result = dict(criteria=vars(criteria).copy(), search_limits=dict(want=50, max_pages=25))
+        before = copy.deepcopy(result)
+        text = tool.export_search_conditions(result)
+        for value in ('参考星系: Sol', '检索半径 ly: 500', '最多结果: 50', '最多页数: 25',
+                      'AX装备规格齐全: 是', '要求通用无人机控制器7A及7C: 是',
+                      '包含其他全配件公共折扣站: 不适用（未要求折扣）', '全部联邦船: 否'):
+            self.assertIn(value, text)
+        self.assertEqual(result, before)
+        self.assertEqual(tool.export_search_conditions({}), '未记录检索条件')
+
     def test_row_filter_runs_before_result_limit_and_radius_is_preserved(self):
         def search(kind, conditions, **kwargs):
             normalized = engine.normalize_conditions(kind, conditions)
@@ -172,11 +324,11 @@ class FullOutfittingTests(unittest.TestCase):
         error = urllib.error.HTTPError('test', 500, 'Internal Server Error', {}, None)
         original = engine.search
         with patch.object(engine, 'resolve_ref', return_value=('Sol', (0, 0, 0), False)), \
-                patch.object(engine, '_http_json', side_effect=[dict(results=[row], count=2), error, error]) as http, \
+                patch.object(engine, '_http_json', side_effect=[dict(results=[row], count=2), dict(results=[]), dict(results=[]), error, error]) as http, \
                 patch.object(engine, 'search', side_effect=lambda *a, **kw: original(*a, **dict(kw, page_size=1))), \
                 patch.object(tool.time, 'sleep'):
             result = tool.search(self.criteria, catalog=self.catalog)
-        self.assertEqual(http.call_count, 3)
+        self.assertEqual(http.call_count, 5)
         self.assertEqual(len(result['rows']), 1)
         self.assertEqual(result['scanned'], 1)
         self.assertEqual(result['total'], 2)
@@ -251,6 +403,29 @@ class FullOutfittingTests(unittest.TestCase):
             self.assertEqual(evidence['present'], 0)
             self.assertEqual(len(evidence['unknown']), 1)
         self.assertNotIn('Rapid Phase Multi-Cannon', catalog.POWER_MODULES)
+
+    def test_high_yield_2b_exclusion_keeps_other_merc_requirements_and_identity_facts(self):
+        excluded = dict(name='High-Yield Enzyme Missile Rack', ed_symbol='hpt_causticmissile_fixed_medium',
+                        **{'class': 2, 'rating': 'B'}, category='mercgear')
+        required = dict(name='Rapid Phase Multi-Cannon', ed_symbol='merc_multicannon',
+                        **{'class': 2, 'rating': 'E'}, category='mercgear')
+        other_spec = dict(excluded, ed_symbol='future_variant', **{'class': 3, 'rating': 'A'})
+        data = dict(self.catalog, special_items=[excluded, required], special_issues=[],
+                    module_facts=[])
+        criteria = tool.build_criteria('Sol', 500, special_equipment=True)
+        row = dict(self.row, modules=[*self.items, required])
+        before = copy.deepcopy(data)
+        evidence = tool.check_station(row, criteria, data)
+        self.assertTrue(evidence['matched'])
+        self.assertEqual(evidence['required'], len(self.items) + 1)
+        self.assertEqual(data, before)
+        row['modules'] = self.items
+        self.assertEqual(len(tool.check_station(row, criteria, data)['missing']), 1)
+        self.assertFalse(catalog.excluded_merc_spec(other_spec))
+        data['special_items'].append(other_spec)
+        self.assertEqual(len(tool.check_station(row, criteria, data)['missing']), 2)
+        with patch.object(catalog, 'SPECIAL_MODULES', {'High-Yield Enzyme Missile Rack'}):
+            self.assertEqual(catalog.special_issues([]), [])
 
     def test_jameson_reference_remains_visible_outside_radius_and_lyr_scope(self):
         row = dict(self.row, name='Jameson Memorial', system_name='Shinrarta Dezhra', distance=65)

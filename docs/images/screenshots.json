@@ -1,15 +1,15 @@
 {
-  "version": "0.1.4-beta.2",
-  "captured_at": "2026-10-19T18:22:52+11:00",
+  "version": "0.1.4",
+  "captured_at": "2026-10-20T22:15:22+11:00",
   "data": "Offline illustrative fixtures; not live game records or verified routes.",
   "screenshots": [
     {
       "file": "main-gui.png",
       "language": "zh",
-      "title": "Elite 星系/空间站全条件筛选器 — v0.1.4-beta.2",
+      "title": "Elite 星系/空间站全条件筛选器 — v0.1.4",
       "width": 2400,
       "height": 920,
-      "sha256": "26f31e8952e704264c66003b4609063d6763a391fbd697313a318323da426d81"
+      "sha256": "62a1893e085df953ea3f60e705e90939c1c3368af0288c36a67e7b3090d58728"
     },
     {
       "file": "rare-goods-target-finder.png",
@@ -17,7 +17,7 @@
       "title": "稀有商品目标查找器",
       "width": 1540,
       "height": 860,
-      "sha256": "000eda7c66a938acfdb32488f42118a9dd993d2dd0cc376952195a68225b234a"
+      "sha256": "b69c49397b0ef3a8e4eb360d7ed8474bcf4e84ef7ce95425d8138a20ade56094"
     },
     {
       "file": "pirate-massacre-finder-zh.png",
@@ -25,7 +25,7 @@
       "title": "海盗任务查找器",
       "width": 1540,
       "height": 860,
-      "sha256": "a07ff3c3a6b8802ee34f25a8af3adff7be7d68fa3f7785ab388a4f4ea99bc626"
+      "sha256": "db33119df91ff3be7974f4581d7e1e28d8b3d48ef74bfb104121a8af5439c032"
     },
     {
       "file": "pirate-massacre-finder-details-zh.png",
@@ -33,7 +33,7 @@
       "title": "海盗任务查找器",
       "width": 1540,
       "height": 860,
-      "sha256": "464f71f9a528e34a1ade3412e239c145cd2a036dce3aae90ad80efe54255ee92"
+      "sha256": "7a934db21d0b83ee746e09071eb0307725b793ee342f1424fe0803703cee991f"
     },
     {
       "file": "carrier-parking-finder.png",
@@ -41,7 +41,7 @@
       "title": "航母车位查找",
       "width": 1300,
       "height": 690,
-      "sha256": "4eb08a5c494fca27479335547c28ccb5c6d4d33ce8196d9e4ec6b1e52a8fa75f"
+      "sha256": "8d7402b3985ee95c4737942a20f4ef8e99b3f1ccae418439e6f82fd9e8bd6242"
     },
     {
       "file": "system-midpoint-finder.png",
@@ -49,7 +49,7 @@
       "title": "两系中点 - 离中点最近的星系",
       "width": 1100,
       "height": 650,
-      "sha256": "9d22ac5ae4788c17703cdb953327fa79e5bcce7ece09ac7398dd2bc55f1a506a"
+      "sha256": "284aa15ffc162262978f4121ff7250f41bf483c6b9e6cd305217f76ef98dc477"
     },
     {
       "file": "colonisation-finder.png",
@@ -57,7 +57,7 @@
       "title": "殖民候选星系查找器",
       "width": 1700,
       "height": 930,
-      "sha256": "968735703eb7faff0c78509fab19c4c6fd29a89d2445e50b5447bec7076ad734"
+      "sha256": "b86d72b3340e71c578fc0a899fdc6189cb93d2847dbd19145fa7fc8d4089e8ad"
     },
     {
       "file": "colonisation-finder-details.png",
@@ -65,7 +65,7 @@
       "title": "殖民候选星系查找器",
       "width": 1700,
       "height": 930,
-      "sha256": "9ed15a615e9c2d9636008d9b8885d0b55c701114bff0da79614c29b88db34138"
+      "sha256": "1acba8570139e32679dc9f90c930d52e623e02acf14652d00612d05e8dc66b20"
     },
     {
       "file": "engineer-shopping.png",
@@ -73,7 +73,7 @@
       "title": "工程师途中采购",
       "width": 1600,
       "height": 930,
-      "sha256": "ce7553a996bbb8e5e08c47374c0452a04ba502f5bebbec528f4d5299a0cc7163"
+      "sha256": "ca2c374f759ba8769c8e874d26decbca93a2f41841ded9e71f884a7d6a940542"
     },
     {
       "file": "engineer-shopping-route-details.png",
@@ -81,15 +81,23 @@
       "title": "工程师途中采购",
       "width": 1600,
       "height": 930,
-      "sha256": "01f1cd34d0e189395bab6b9a9fdf3b5f8f1da40001bb22a3f35cd80ccdd6d4ef"
+      "sha256": "3406de8b07ad767786aae685aab6bd876ec9804cd176e2947f487131e9ba777d"
+    },
+    {
+      "file": "full-outfitting-finder.png",
+      "language": "zh",
+      "title": "查找满配件空间站",
+      "width": 1600,
+      "height": 1000,
+      "sha256": "c882209cb43fbaf7163a9debc258dc0b6c60c6fa781bea4fbad94b4828d8e142"
     },
     {
       "file": "main-gui-en.png",
       "language": "en",
-      "title": "Elite Dangerous System / Station Filter — v0.1.4-beta.2",
+      "title": "Elite Dangerous System / Station Filter — v0.1.4",
       "width": 2400,
       "height": 920,
-      "sha256": "96b77d8a6a5ed3ca1858ad7aedb64947592cc4ac2fc603895ece6e8d41127e9d"
+      "sha256": "b99b8d43ea934a89d961f4051212754e2ab1c39d65c8bc0de1e9bd77181e15b3"
     },
     {
       "file": "rare-goods-target-finder-en.png",
@@ -97,7 +105,7 @@
       "title": "Rare goods target finder",
       "width": 1540,
       "height": 860,
-      "sha256": "d96e0deb6efe45aad1fbc324bfcb255966d55b2196bc2ddfe1d552fcaed0976c"
+      "sha256": "c67d037a7ed4163eba1e2c27f5c8a43f3a159573c26a9f58fd080f8651716c6a"
     },
     {
       "file": "pirate-massacre-finder-summary-en.png",
@@ -105,7 +113,7 @@
       "title": "Pirate massacre finder",
       "width": 1540,
       "height": 860,
-      "sha256": "ec2e97a3807e8468eea3c8630a3a8bab64a11de08e0597ec6d69c97937e66502"
+      "sha256": "3c7ad56ea2b9db6e254b72000182bd4b08e14d201c124dfa96b27b844e52cd33"
     },
     {
       "file": "pirate-massacre-finder-en.png",
@@ -113,7 +121,7 @@
       "title": "Pirate massacre finder",
       "width": 1540,
       "height": 860,
-      "sha256": "ec9babd57ed31d310bf7acb2b334876b67ee89a6992b183c4e040eec9bddafb1"
+      "sha256": "625f855639ad2f5bfed3119414b3ff756a93769016d8fe2860c7a32748ddf791"
     },
     {
       "file": "carrier-parking-finder-en.png",
@@ -121,7 +129,7 @@
       "title": "Carrier parking finder",
       "width": 1300,
       "height": 690,
-      "sha256": "c2470cd4aa42613be7e7bb424961b04364ac750b99f7f7838315f89dd9fc5228"
+      "sha256": "fdab067eaf18ea6055c9cd7137b333456d0f7a6d7e9c071cc27b1c8597aec8e5"
     },
     {
       "file": "system-midpoint-finder-en.png",
@@ -129,7 +137,7 @@
       "title": "Midpoint - nearest systems",
       "width": 1100,
       "height": 650,
-      "sha256": "0f6a1c8fe406492d3a133cd17ae5f31f750fe3ea9bc7aefa7693d4534e9cd09f"
+      "sha256": "9863d5fd1c3659d2840e59fea4f399b24fdbed829377ad8e6cb06794983af63b"
     },
     {
       "file": "colonisation-finder-en.png",
@@ -137,7 +145,7 @@
       "title": "Colonisation candidate finder",
       "width": 1700,
       "height": 930,
-      "sha256": "4fd77c984c2e2a73cbdacbc587fd60b132ddeabd54d302d1e29230237b774d74"
+      "sha256": "5954499a118dfe5912522117b51650ce95d05479a19ffba48f27097bb423de5d"
     },
     {
       "file": "colonisation-finder-details-en.png",
@@ -145,7 +153,7 @@
       "title": "Colonisation candidate finder",
       "width": 1700,
       "height": 930,
-      "sha256": "4fd77c984c2e2a73cbdacbc587fd60b132ddeabd54d302d1e29230237b774d74"
+      "sha256": "5954499a118dfe5912522117b51650ce95d05479a19ffba48f27097bb423de5d"
     },
     {
       "file": "engineer-shopping-en.png",
@@ -153,7 +161,7 @@
       "title": "Engineer trip shopping",
       "width": 1600,
       "height": 930,
-      "sha256": "1a416912a5743b296f9c4db9e48bca6a5df2d77a587da4efddaf10793b975e9d"
+      "sha256": "bbb6b630a05e70e0fa9a1de58d738b6736d6fccce5b9385561866f0287fdac24"
     },
     {
       "file": "engineer-shopping-route-details-en.png",
@@ -161,7 +169,15 @@
       "title": "Engineer trip shopping",
       "width": 1600,
       "height": 930,
-      "sha256": "a3d54d831dc5e800c1268cc4b33910f89b28f47f6058a977dc4365757ceecec2"
+      "sha256": "bbb6b630a05e70e0fa9a1de58d738b6736d6fccce5b9385561866f0287fdac24"
+    },
+    {
+      "file": "full-outfitting-finder-en.png",
+      "language": "en",
+      "title": "Find fully outfitted stations",
+      "width": 1600,
+      "height": 1000,
+      "sha256": "af61b55817896ed34cb5d488e2823a7698081a034b84bcc2ac538b515efa79fb"
     },
     {
       "file": "main-system-details.png",
@@ -169,7 +185,7 @@
       "title": "主界面星系详细条件",
       "width": 1500,
       "height": 1100,
-      "sha256": "9f20f40adf22ec0d66a791882c454b05f46ae4ee7af90870d643e2450750ee5c"
+      "sha256": "5b047c8ba26a61fa8ee51e87eb2178b0455693f5be8731fffcfbbd25bed8e14a"
     },
     {
       "file": "main-system-details-en.png",
@@ -177,7 +193,7 @@
       "title": "Main-window system details",
       "width": 1500,
       "height": 1100,
-      "sha256": "6b21689f60681eb763f90510bcafb429ec54b3d1b695b2c9035fa93a56452f2c"
+      "sha256": "af666edb5b09c1fbd56575f27aec43f21962d8fdd3049342f33cba05de6649e6"
     }
   ]
 }

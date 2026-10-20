@@ -1,6 +1,8 @@
 # Elite_dangerous_Filter
 
-**Unreleased source tool:** [Full-outfitting discount station finder](docs/full-outfitting.md): all known ordinary/Power variants at the same station, with optional discount requirements (off by default). No carriers, including Stronghold Carriers. Optional ship groups with matching hull armour and a Guardian technology broker. Not in the published Beta.2 EXE.
+For other ED tools: [ED data sources and API development reference (Chinese)](docs/ed-api-reference.md), including request examples, identity mapping, authentication, caching, limitations and verification notes.
+
+**New in stable v0.1.4:** [Find fully outfitted stations](docs/full-outfitting.md): all known ordinary/Power variants at the same station, with optional AX equipment, Universal limpet controllers and discount requirements (off by default). Initial/manual discovery uses Sol + 20,000 ly; subsequent queries filter the saved shortlist, looking up only missing coordinates when changing reference. No carriers, including Stronghold Carriers. Optional ship groups with matching hull armour and a Guardian technology broker. Manual [GitHub catalogue updates](docs/catalog-updates.md) are supported; no catalogue release has been published yet. Catalogue updates do not automatically refresh stock.
 
 Merc Coins special equipment is a separate, default-off requirement. Jameson Memorial is a positive regression benchmark, not an injected or fixed result. The Sol / 500 ly / 50 results / 25 pages / other public discounts live regression passed on 2026-10-20; see [validation details](docs/full-outfitting.md#创世正向回归基准).
 
@@ -24,9 +26,9 @@ Previously published v0.1.3 / v0.1.4-beta.1 EXEs still include the older planner
 - **Rare goods target finder:** 142 sources across 138 systems, with optional experimental neutron-alignment ranking.
 - **Plus** pirate massacre candidates (testing), carrier parking and system midpoint finders.
 
-[**Download Windows EXE v0.1.3**](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/download/v0.1.3/EliteDangerousFilter.exe) · [v0.1.3 release notes](docs/releases/v0.1.3.md) · [All releases](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
+[**Download Windows EXE v0.1.4**](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/download/v0.1.4/EliteDangerousFilter.exe) · [v0.1.4 release notes](docs/releases/v0.1.4.md) · [All releases](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
-**UI refactor Beta:** [Download v0.1.4-beta.2](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/tag/v0.1.4-beta.2) · [Beta release notes](docs/releases/v0.1.4-beta.2.md). **Pre-release; UI refactoring, planner extraction and search updates may have potential bugs and regressions.** Includes DPI/font fixes, engineer pad/Power options and expanded RES search at minimum mission factions 0. Back up `%LOCALAPPDATA%\EliteDangerousFilter` first; Beta and stable share the data directory. v0.1.3 remains latest stable.
+**Back up `%LOCALAPPDATA%\EliteDangerousFilter` before upgrading.** Beta and stable share this directory; keep the old EXE and backup for rollback. v0.1.4 includes the Beta appearance/DPI improvements, planner extraction, engineer pad options and RES expansion. [Beta.2 historical notes](docs/releases/v0.1.4-beta.2.md) remain available. Stable does not mean bug-free; pirate finding remains experimental and stock/discounts require in-game verification.
 
 Run `EliteDangerousFilter.exe` on 64-bit Windows; no Python installation is needed. Searches require an internet connection, but no API key. The EXE is not code-signed, so Windows SmartScreen may warn on the first launch: choose **More info → Run anyway**, or verify the file against the `SHA256SUMS.txt` asset published with the release (`certutil -hashfile EliteDangerousFilter.exe SHA256`).
 
@@ -62,7 +64,7 @@ Repository: [kxdxzr/Elite_dangerous_Filter](https://github.com/kxdxzr/Elite_dang
 
 **Main-window browsing and results (v0.1.3):** condition categories and module slot types shorten candidate lists without changing filter semantics or clearing names. Sessions preserve drafts and condition files retain slot choices. Results/CSV use separate condition-driven distances, module name/class/rating and discount/source columns, with horizontal scrolling instead of a packed information column.
 
-**Current source only (not in v0.1.4-beta.1):** engineer shopping adds ship-size pad filtering and a pledged Power selector (default None). Selecting a Power defaults to assuming maximum-rank weapon rewards: Arissa / Archer / Yuri Grom 30%, Denton 40%, within that Power's territory. Actual rank is not read; the UI and result sources label the assumption. Disable the checkbox for public-only discounts. No carrier bonuses or discount stacking. Archer's reported-bug exclusion applies to public discounts, not this separate personal bonus.
+**v0.1.4:** engineer shopping includes ship-size pad filtering and a pledged Power selector (default None). Selecting a Power assumes maximum-rank weapon rewards: Arissa / Archer / Yuri Grom 30%, Denton 40%, within that Power's territory. Actual rank is not read; the UI and result sources label the assumption. Select None for public-only discounts. No carrier bonuses or discount stacking. Archer's reported-bug exclusion applies to public discounts, not this separate personal bonus.
 
 **Ship/module discounts:** **Any / True** only, for positive name comparisons. Eligibility follows [documented public station/Power rules](docs/station-discounts.md), not a standard-price download or a guess based on associated Power. The same item must match name, module specification and an applicable rule. Li Yong-Rui requires the controlling Power and Fortified/Stronghold state. Known location-specific and product-restricted rules are checked explicitly; unmatched/missing evidence is unknown, never a verified full price. Discount % is the percentage reduction (15 means 15% off), shown separately from its source in results and CSV. Personal rank/pledge rewards, expired CG discounts and unverified stacking are excluded. Verify stock, permits and final price in game.
 
@@ -72,7 +74,7 @@ Repository: [kxdxzr/Elite_dangerous_Filter](https://github.com/kxdxzr/Elite_dang
 - **Main-window extensions in v0.1.2:** local station/carrier/faction counts in system field rows, plus **Planet / nearest-populated conditions** for nested planet/ring groups and verified nearest-distance bounds with an editable population threshold. These combine with ordinary conditions without imposing colonisation restrictions; see [detailed rules](docs/README_search_logic.md).
 - **General filters:** systems/stations, repeated conditions, OR within a multi-select row and AND between rows.
 - **Distances and modules:** multiple reference points, distance intersections/outside ranges, same-item module class/rating matching, and shipyard/outfitting freshness filters.
-- **Carrier parking finder:** up to 50 ly; use carrier station types catalogued by Spansh to find parking candidates, with optional inclusive minimum/maximum carrier counts. Incomplete types remain Unknown; counts are not live vacancies.
+- **Carrier parking finder:** up to 50 ly; use carrier station types catalogued by Spansh to find parking candidates, with an optional inclusive maximum carrier count. Incomplete types remain Unknown; counts are not live vacancies.
 - **Rare goods target finder:** 142 source entries across 138 systems, default Ngurii and a 200–220 ly target range. Select an associated Power or scan all 12. Requires large pads; excludes planetary stations, carriers and colonisation ships. Each Power starts at ≤100 Ls and expands to ≤1000 Ls only after a complete search finds no matches. Shows up to five targets per Power, ordered by ly then Ls.
 - **Pirate massacre candidates (testing):** EDTools source/target pairs and site records, with Spansh faction, issuer-count, controlling Power, source-station and target-ring filters.
 - **Utilities:** system midpoint, cancellation, diagnostics, sortable tables, CSV export, condition files and session restoration across all tool windows.
@@ -110,7 +112,7 @@ Switch the main search type to **systems**:
 
 ### Carrier parking finder update
 
-The tool keeps its name. Enter optional **Min carriers / Max carriers** to filter nearby systems using inclusive bounds; blank means unrestricted and maximum **0** selects records with a confirmed zero count. Carrier types are counted from Spansh records rather than inferred from total station counts. Unknown counts do not pass an enabled count bound. These are not live parking vacancies.
+The tool keeps its name. Enter optional **Max carriers** to filter nearby systems using an inclusive bound; blank means unrestricted and maximum **0** selects records with a confirmed zero count. Carrier types are counted from Spansh records rather than inferred from total station counts. Unknown counts do not pass an enabled count bound. These are not live parking vacancies.
 
 See [detailed rules](docs/README_search_logic.md) and the [v0.1.3 release notes](docs/releases/v0.1.3.md). The screenshot gallery below now covers the current main window and all seven built-in tools.
 
@@ -124,7 +126,7 @@ Arrival distances in Ls also use exactly two decimal places throughout result ta
 
 **Updated v0.1.2 progress:** main search and all tools show measured stage counts and percentages when a denominator is known (candidate checks, station checks, body/ring batches or requested midpoint results). Percentages describe the labelled stage, not an estimated end-to-end duration. Network preparation and capped/unknown totals remain explicitly indeterminate with known counts; page budgets are not presented as a whole-database total. Stopped, failed or incomplete searches are distinguished from completed searches.
 
-The rare-goods detail table and CSV omit the redundant **Range** column. The 100 Ls / 1000 Ls fallback rule remains; v0.1.3 also deduplicates destinations by system. v0.1.3 remains the stable release; the UI-refactor Beta is linked above.
+The rare-goods detail table and CSV omit the redundant **Range** column. The 100 Ls / 1000 Ls fallback rule remains; destination deduplication introduced in v0.1.3 is retained in stable v0.1.4.
 
 **Further improvements included in v0.1.3:** colonisation columns/CSV start with candidate name → top-three scan-value planets → nearest populated system → nearest distance → maximum pad → other information. Copy buttons cover relevant result names/systems/stations across the main and tool windows. Absent selection or empty fields show a prompt without clearing the clipboard. Double-click shortcuts remain available.
 
@@ -206,7 +208,7 @@ CLI entry point: `python spansh_filter.py --help`. Root launchers retain the old
 
 ## Screenshots
 
-Captured from the **v0.1.4-beta.2 UI on 2026-10-19 (Light appearance)**, covering the main window, its detailed system-condition editor, and **all six built-in tool windows**. These are real application windows populated with **offline illustrative data**, explicitly labelled by the yellow banner. They do **not** show live inventory, actual missions, claimable systems or verified routes. Windows are widened where needed; click an image for full resolution. The standalone neutron planner is no longer part of this EXE. [Chinese screenshots](README_zh-CN.md#截图).
+Captured from **v0.1.4 on 2026-10-20 (Light appearance)**, covering the main window, its detailed system-condition editor, and **all seven built-in tool windows**. These are real application windows populated with **offline illustrative data**, explicitly labelled by the yellow banner. They do **not** show live inventory, actual missions, claimable systems or verified routes. Windows are widened where needed; click an image for full resolution. The standalone neutron planner is no longer part of this EXE. [Chinese screenshots](README_zh-CN.md#截图).
 
 [Main search](#main-window) · [Rare goods](#rare-goods-target-finder) · [Pirate candidates](#pirate-massacre-finder-testing-1) · [Carrier parking](#carrier-parking-finder) · [Midpoint](#system-midpoint-finder) · [Colonisation](#colonisation-candidate-finder-1) · [Neutron routes](#neutron-jump-planner) · [Engineer shopping](#engineer-trip-shopping)
 
@@ -243,7 +245,7 @@ Two views of the same query: the result overview, followed by the table scrolled
 
 ### Carrier parking finder
 
-The current carrier-count minimum/maximum filters and sortable recorded counts, replacing the obsolete parking estimates. Counts are not live vacancies.
+The maximum-carrier filter and sortable recorded counts replace obsolete parking estimates. Counts are not live vacancies.
 
 ![Carrier parking finder in English](docs/images/carrier-parking-finder-en.png)
 
@@ -281,7 +283,13 @@ Multiple independently specified shopping items, engineer selection, custom rang
 
 Screenshot refreshes are reproducible on Windows with optional developer dependency **Pillow 12**: `python scripts/capture_screenshots.py`. The script blocks network access, isolates sessions and records version/dimensions/checksums in [screenshots.json](docs/images/screenshots.json); Pillow is not required to run the application.
 
-The gallery shows the UI-refactor Beta, not the older stable EXE. Each release provides its own `SHA256SUMS.txt`; passing checks does not rule out potential Beta bugs.
+### Find fully outfitted stations
+
+Cached station shortlists, optional inventory/discount conditions, manual updates and CSV query snapshots. Demonstration data are illustrative, not verified stock.
+
+![Find fully outfitted stations in English](docs/images/full-outfitting-finder-en.png)
+
+The gallery shows stable v0.1.4. Each release provides its own `SHA256SUMS.txt`; passing checks does not rule out potential bugs.
 
 ## CSV exports and provenance
 

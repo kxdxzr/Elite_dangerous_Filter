@@ -1,8 +1,35 @@
-# 全配件折扣站查找器 / Full-outfitting discount station finder
+# 查找满配件空间站 / Find fully outfitted stations
 
-**当前源码新增，未包含在已发布的 v0.1.4-beta.2 EXE 中。**
+**自v0.1.4正式版起提供；旧v0.1.4-beta.2 EXE不含此工具。**
+
+支持[GitHub装备清单独立更新与回退](catalog-updates.md)：手动检查、确认版本／摘要、校验后安装；已有库存快照时，需要“更新数据并查询”后应用新清单。首份清单Release尚未发布。
+
+## 一次更新，多次本地筛选
+
+**适用范围提醒：主要适用于Bubble（人类核心居住区）。远离Bubble后，现有站点名单可能不再适用或没有结果；更换参考星系只重算距离，不会自动发现当地站点。无结果不代表当地一定没有配件供应。**
+
+- 首次查询和手动更新均固定以**Sol为中心、半径20,000 ly**建立最宽松库存快照，与用户表单中的参考星系／半径无关。采集不要求折扣、AX、Merc、通用无人机控制器、舰船或Guardian经纪人。保留所有通过最宽松库存核验的站及其原始库存、已有身份补证和最终展示资料，再按用户条件重算距离及筛选。
+- 建立快照时不受“最多结果”限制，必须完整取完候选；“最多页数”仅限制联网更新预算。页数不足、停止或网络失败都不会用不完整数据替换原快照。
+- 之后所有条件筛选都基于已有的小型站点名单，**不重扫库存、不重建目录**。最多结果仅限制显示数量，不截断保存的数据。缓存中仍无法确认的Merc身份等不会因本地筛选而猜成有货。
+- **可以任意更换参考星系或扩大／缩小半径**：用名单中站点的星系坐标重算距离，按新距离排序、筛选；不会因此刷新库存。缺少新参考星系或站点坐标时，仅向Spansh查询相应星系坐标并缓存，之后可离线复用。坐标无法确认则报错，绝不套用旧参考星系的距离。
+- 扩大半径不会自动发现名单外的新站点；CSV中的“已有站点名单筛选完成”只代表本地名单已筛完，不表示新范围的全量检索完成。需要重新发现站点或刷新库存时，手动点击“更新数据并查询”。
+- 快照继续保存在同一个`full_outfitting_snapshot_v1.json`文件，手动更新成功后原子覆盖，不另存多套扫描缓存；失败保留原文件。已有Sol中心20,000 ly完整缓存会原位迁移格式并直接复用，不重扫库存，也不改变原库存时间。旧小范围缓存需手动更新，不能误认为已覆盖固定范围。关闭窗口或重启程序仍可使用，不存在自动过期刷新。
+- 快照包含固定装备目录；GitHub清单更新或回退后，旧快照仍按原目录核验，手动更新库存数据后才采用新清单。下载清单不代表刷新库存。
+- 更新失败保留原快照和已显示结果；可改回旧快照范围继续查询。首份完整快照尚未成功建立时，下次查询仍需建立，或点击更新重试。
+- 首次采集的范围和时间保留为来源信息；换参考星系不改变它们或库存时间，不是全银河或实时库存保证。
+- 界面显示“缓存于（N）天之前”，按快照原创建时间计算已过的完整24小时数，不使用文件修改时间；不足一天显示0天。打开窗口即可读取本地缓存时间，筛选／格式迁移不会重置天数；成功更新数据后重新计算。
 
 ## 筛选语义
+
+- **Merc要求明确排除High-Yield Enzyme Missile Rack 2B**，保留身份事实及其他Merc规格要求。[排除记录与恢复评估](catalog-next-version.md)包含原因和限制；移除此项不代表其他Merc身份歧义已解决。
+
+- **通用多功能无人机控制器7A／7C独立可选，默认关闭**；启用后要求两项同站齐全。其他无人机控制器的要求不变，CSV与会话记录此开关。
+- **普通及Mk II大型行星车库当前暂不要求**，已加入[未来版本计划](catalog-next-version.md)。普通Planetary Vehicle Hangar仍保留。
+
+- **AX装备独立可选，默认关闭。** 包含AX导弹／多管炮及增强型、高级导弹／多管炮、遥控高射炮、异种扫描器（含增强型及脉冲波）、实验武器稳定器、关闭力场／异种脉冲中和器、去污无人机及异种多功能无人机控制器，以及泰坦救援专用的2B Sub-Surface Extraction Missile。普通采矿用Sub-Surface Displacement Missile仍是默认要求。Power配件要求不变。覆盖分母随开关变化，CSV记录条件。下文853/853等验收数字为拆分AX之前的历史结果。内部会话字段仍保留`ax_weapons`以兼容已有设置，含义现为AX装备。
+- **`_free`领取版机库不列入库存需求**，无论AX开关是否开启；普通付费版机库仍须逐规格核验。不会把此规则扩展为排除所有`_free`配件。
+- **当前版本暂不要求Mk II舰载机库（Mk II Vessel Hangar）**，付费版也不要求；记录于[装备清单：下版本可能添加](catalog-next-version.md)，未来版本是否恢复另行决定。普通Vessel Hangar仍保留。
+- Brestla / i Sola Prospect具有20%公共加价（原价120%），结果和CSV明确显示，不再写成未知折扣；该站不能通过“必须全配件公共折扣”。规则仅匹配这个星系与站点组合，不推广到整个Brestla星系。
 
 - **折扣要求可选，默认关闭。** 默认只要求同站全部已知普通／Power配件实际规格齐全，折扣仅作为结果信息。
 - 启用“必须全部普通／Power配件都有公共折扣”后，默认仅 Li Yong-Rui 实际控制的 Fortified / Stronghold 星系，使用15%公共配件折扣。
@@ -65,6 +92,12 @@ EDSM未提供库存更新时间，界面／CSV明确列出其来源，不冒充�
 另外显示“库存未齐或未收录”，检索说明按这两类和其他条件失败分别标注。只有真实完整、仅剩身份问题的候选才触发第二来源复核；复核成功转为正式命中，否则保留待复核，不强行判有货。
 
 结果显示覆盖数量、公共折扣范围及来源、Guardian 经纪人、许可证据和配件更新时间。
+CSV开头的项目信息区最下方记录本次检索条件（参考星系、半径、结果／页数上限及全部可选条件），
+随后空行分隔结果表头；使用查询快照，不使用导出时修改过的表单。
+最终命中统一补查Spansh星系资料（包括已知折扣站），填入许可等空字段；距离、
+经纪人及服务字段缺失时，再按同星系、同站名、同市场ID补查站点。
+不覆盖已有的false、零值或实际库存，不把新响应时间冒充原库存时间。
+Spansh仍无记录时显示“Spansh未提供”，网络失败记录到检索说明，保留已核验命中。
 各来源共享“最多页数”预算；结果数量达到上限不代表搜完整个范围。为避免深分页，每个来源最多扫描10000条候选。
 HTTP 500/502/503/504及临时网络错误最多重试一次；失败时标明来源、页码和错误，不丢掉之前已验证的命中。
 一个独立来源失败后，在预算及停止条件允许时仍可查询其他来源。部分结果导出须确认，CSV保留检索完整性标记。
@@ -78,7 +111,34 @@ HTTP 500/502/503/504及临时网络错误最多重试一次；失败时标明来
 
 ## English
 
-**Unreleased source feature; not included in the published v0.1.4-beta.2 EXE.**
+This tool is primarily intended for the Bubble. Far outside it, a saved Bubble
+station shortlist may no longer be useful or return results. Changing reference
+only recalculates distances; it does not discover local stations. No results do
+not prove that local outfitting is unavailable.
+
+Initial and manual discovery always use Sol as the centre with a 20,000 ly radius,
+independently of the form's reference/radius, selected options and display limit.
+The resulting persistent widest-scope snapshot is then filtered for the user's query.
+Subsequent searches reuse that station shortlist and stock. Any reference/radius is
+supported by recalculating and sorting distances from system coordinates. Only missing
+system coordinates are fetched from Spansh and cached; inventory is not re-fetched.
+Increasing radius does not discover stations outside the saved shortlist. Only an
+explicit **Update data and search** refreshes the stock/shortlist. Failed/incomplete updates preserve the previous
+snapshot. The catalogue is pinned within each snapshot; installed catalogue updates
+apply when stock data is manually refreshed. Snapshot time and scope are exported.
+
+AX equipment is a separate, default-off requirement, including AX/Advanced weapons,
+flak launchers, Xeno scanners, experimental weapon stabilisers, neutralisers,
+decontamination and Xeno limpet controllers, and the Titan-rescue 2B Sub-Surface
+Extraction Missile. The mining Sub-Surface Displacement Missile remains required.
+Universal Multi Limpet Controllers 7A/7C are separately optional (off by default).
+Claimable `_free` hangars, Mk II Vessel Hangars, and both Large Planetary Vehicle
+Hangar families are excluded from current requirements; standard Vessel Hangars
+and Planetary Vehicle Hangars remain required. Large hangars are on the future-version review list.
+Power requirements are unchanged. Coverage and CSV
+record the selected AX scope; the 853-item live regressions below predate this split.
+
+**Available in stable v0.1.4; not included in the older v0.1.4-beta.2 EXE.**
 
 Discount requirements are optional and off by default. Complete ordinary/Power
 stock is still mandatory; discounts are informational unless explicitly required.

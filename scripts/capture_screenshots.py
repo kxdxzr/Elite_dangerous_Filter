@@ -157,6 +157,18 @@ def main():
             engineer.search_state['result'] = dict(rows=copy.deepcopy(shops), conditions=conditions,
                                                   total=3, scanned=3, notes=['UI demonstration dataset'], stopped=False)
 
+            outfitting = app.full_outfitting_window()
+            outfitting.search_state['result'] = dict(
+                rows=[dict(name='Demo Fully Outfitted Station', system_name='Demo System A',
+                           distance=42.5, distance_to_arrival=125, needs_permit=False,
+                           technology_broker='Guardian', outfitting_updated_at='2026-10-20T00:00:00Z',
+                           _full_outfitting=dict(present=792, required=792, discount_min=15, discount_max=15,
+                                                discount_covered=792, discount_total=792, sources=['Li Yong-Rui']))],
+                criteria=vars(outfitting.criteria()[0]), search_limits=dict(want=50, max_pages=25),
+                snapshot_created_at='2026-10-20T00:00:00+00:00',
+                snapshot_scope=dict(reference='Sol', radius=20000),
+                catalog_revision='UI demonstration catalogue', notes=['UI demonstration dataset'])
+
             rare = app.rare_goods_window()
             if rare is None:
                 rare = next(w for w in root.winfo_children() if getattr(w, '_raw_title', '') == '稀有商品目标查找器')
@@ -218,7 +230,7 @@ def main():
                 colony.result_tree.insert('', 'end', values=[data.get(key, '') for key in colony.result_tree['columns']])
             colony.result_tree.sort_by('near_distance')
 
-            windows = [root, rare, pve, carrier, midpoint, colony, engineer]
+            windows = [root, rare, pve, carrier, midpoint, colony, engineer, outfitting]
             for win in windows[1:]:
                 win.withdraw()
             for language in ('zh', 'en'):
@@ -243,6 +255,7 @@ def main():
                 capture(engineer, f'engineer-shopping{suffix}.png', language, width=1600, height=930)
                 engineer.result_tree.xview_moveto(1)
                 capture(engineer, f'engineer-shopping-route-details{suffix}.png', language, width=1600, height=930)
+                capture(outfitting, f'full-outfitting-finder{suffix}.png', language, width=1600, height=1000)
             # The nested main-window system-condition editor is another new UI.
             from main_system_gui import DetailsRow
             app.kind.set('systems')

@@ -3,11 +3,11 @@ from datetime import datetime
 
 PROJECT_AUTHOR = 'kxdxzr'
 PROJECT_NAME = 'Elite_dangerous_Filter'
-PROJECT_VERSION = '0.1.4-beta.2'
+PROJECT_VERSION = '0.1.4'
 PROJECT_URL = 'https://github.com/kxdxzr/Elite_dangerous_Filter'
 
 
-def write_csv_provenance(writer, column_count, language='zh'):
+def write_csv_provenance(writer, column_count, language='zh', search_conditions=None):
     """Write five labelled metadata rows followed by a blank separator.
 
     Importers should skip this preamble before reading the result header.
@@ -20,4 +20,7 @@ def write_csv_provenance(writer, column_count, language='zh'):
     padding = [''] * max(0, column_count - 2)
     for label, value in zip(labels, values):
         writer.writerow(['# ' + label, value] + padding)
+    if search_conditions is not None:
+        label = 'Search conditions' if language == 'en' else '检索条件'
+        writer.writerow(['# ' + label, search_conditions] + padding)
     writer.writerow([])

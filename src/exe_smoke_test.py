@@ -50,10 +50,16 @@ def run(gui, report_path):
         assert 'assume_max_rank' not in shopping.session_variables
         assert any(value.startswith('Jerome Archer') for value in shopping.pledged_power_box['values'])
         outfitting = app.full_outfitting_window()
-        assert outfitting.title() == '全配件折扣站查找器'
+        assert outfitting.title() == '查找满配件空间站'
         assert not outfitting.criteria()[0].other_discounts
         assert not outfitting.criteria()[0].special_equipment
         assert not outfitting.criteria()[0].require_discount
+        assert not outfitting.criteria()[0].ax_weapons
+        assert not outfitting.criteria()[0].universal_limpets
+        assert outfitting.cache_notice_font.actual('weight') == 'bold'
+        import outfitting_snapshot
+        assert outfitting_snapshot.DISCOVERY_REFERENCE == 'Sol'
+        assert outfitting_snapshot.DISCOVERY_RADIUS == 20000
         assert 'landing_pad' in shopping.session_variables
         assert tuple(shopping.landing_pad_box['values']) == ('不限', 'S', 'M', 'L')
         app.set_appearance('dark')
@@ -106,7 +112,7 @@ def run(gui, report_path):
         assert colony.criteria().body_groups[0][0]['field'] == '_is_binary'
         app.set_language("en")
         assert shopping.title() == 'Engineer trip shopping'
-        assert outfitting.title() == 'Full-outfitting discount station finder'
+        assert outfitting.title() == 'Find fully outfitted stations'
         assert colony.title() == "Colonisation candidate finder"
         assert button(colony, '查询').cget('text') == 'Search'
         assert button(shopping, '查询').cget('text') == 'Search'

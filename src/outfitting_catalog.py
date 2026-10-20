@@ -42,6 +42,15 @@ POWER_MODULES = {
     'Imperial Hammer Rail Gun', 'Mining Lance', 'Pacifier Frag-Cannon',
     'Pack-Hound Missile Rack', 'Prismatic Shield Generator', 'Pulse Disruptor Laser',
     'Retributor Beam Laser', 'Rocket Propelled FSD Disruptor', 'Concord Cannon'}
+AX_WEAPONS = {'AX Missile Rack', 'AX Multi-Cannon',
+              'Enhanced AX Missile Rack', 'Enhanced AX Multi-Cannon'}
+AX_EQUIPMENT = AX_WEAPONS | {
+    'Sub-Surface Extraction Missile',
+    'Advanced Missile Rack', 'Advanced Multi-Cannon', 'Remote Release Flak Launcher',
+    'Xeno Scanner', 'Enhanced Xeno Scanner', 'Pulse Wave Xeno Scanner',
+    'Experimental Weapon Stabiliser', 'Shutdown Field Neutraliser',
+    'Thargoid Pulse Neutraliser', 'Decontamination Limpet Controller',
+    'Xeno Multi Limpet Controller'}
 # Operations / Merc Coins pre-engineered equipment is not Powerplay stock.
 # https://cms.zaonce.net/en-GB/node/7931
 # https://forums.frontier.co.uk/threads/new-modules-available-for-mercs.647907/
@@ -82,7 +91,38 @@ def restricted_spec(name, cls):
 
 
 def is_special(item):
-    return item.get('category') == 'mercgear' or item.get('name') in SPECIAL_MODULES
+    return item.get('catalog_group') == 'merc' or item.get('category') == 'mercgear' or item.get('name') in SPECIAL_MODULES
+
+
+def is_ax(item):
+    group = item.get('catalog_group')
+    return group == 'ax' if group is not None else item.get('name') in AX_EQUIPMENT
+
+
+def is_free_hangar(item):
+    """Claimable hangars are not separate required retail stock."""
+    sym = symbol(item)
+    return sym.endswith('_free') and any(token in sym for token in ('buggybay', 'fighterbay'))
+
+
+def excluded_hangar(item):
+    sym = symbol(item)
+    return (is_free_hangar(item) or item.get('name') == 'Mk II Vessel Hangar'
+            or sym.startswith('int_fighterbaymk2_')
+            or item.get('name') in ('Large Planetary Vehicle Hangar', 'Mk II Large Planetary Vehicle Hangar')
+            or sym.startswith(('int_largebuggybay_', 'int_mkiilargebuggybay_')))
+
+
+def is_universal_limpet(item):
+    return (item.get('name') == 'Universal Multi Limpet Controller'
+            or symbol(item).startswith('int_multidronecontrol_universal_'))
+
+
+def excluded_merc_spec(item):
+    # Explicitly excluded requirement, not proof of absence or an ID alias.
+    # Keep the item in identity facts so it cannot masquerade as a base module.
+    return (item.get('name') == 'High-Yield Enzyme Missile Rack'
+            and item.get('class') == 2 and item.get('rating') == 'B')
 
 
 def check_stop(stop):
@@ -116,6 +156,10 @@ def prepare(catalog):
     Conflicts are resolved against station evidence, not by arbitrary precedence.
     """
     result = dict(catalog)
+    if catalog.get('release_engine') == 1:
+        # Validated release packages already classify every numeric ID. Do not
+        # run the old bundled name allowlist over newly released equipment.
+        return result
     combined = [*catalog.get('items', []), *catalog.get('special_items', [])]
     items = {variant(item): item for item in combined if variant(item) and not is_special(item) and ordinary(item.get('name', ''))
              and not restricted_spec(item.get('name'), item.get('class'))}
@@ -220,7 +264,12 @@ def special_issues(items):
     for name in sorted(SPECIAL_MODULES):
         pairs = BUNDLED_MODULE_PAIRS.get(name, ())
         if pairs:
-            issues.extend((name, cls, rating) for cls, rating in pairs if (name, cls, rating) not in covered)
+            issues.extend((name, cls, rating) for cls, rating in pairs
+                          if not excluded_merc_spec(dict(name=name, **{'class': cls, 'rating': rating}))
+                          and (name, cls, rating) not in covered)
+        elif name == 'High-Yield Enzyme Missile Rack':
+            # The known 2B variant is not a required Merc purchase.
+            continue
         elif not any(item.get('name') == name for item in items):
             issues.append((name, None, None))
     return issues
@@ -229,6 +278,14 @@ def special_issues(items):
 def load(stop=None, progress=None, refresh=False, http=None, archive_fetch=None, include_special=False, facts_fetch=None):
     """Build/cache public facts. Cancellation/failed audits never replace a cache."""
     check_stop(stop)
+    import catalog_updates
+    try:
+        package = catalog_updates.read_package()
+        if package:
+            return catalog_updates.as_catalog(package)
+    except (ValueError, OSError) as exc:
+        if progress:
+            progress(f'本地更新清单无效，使用原目录：{exc}')
     http = http or eng._http_json
     archive_fetch = archive_fetch or download_archive
     path = data_file(CACHE_NAME)

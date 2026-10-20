@@ -1083,7 +1083,7 @@ class App:
         route_bar = ttk.Frame(root, padding=(6, 0, 6, 4))
         route_bar.pack(fill='x')
         ttk.Button(route_bar, text='工程师途中采购', command=self.engineer_shopping_window).pack(side='left', padx=4)
-        ttk.Button(route_bar, text='全配件折扣站查找器', command=self.full_outfitting_window).pack(side='left', padx=4)
+        ttk.Button(route_bar, text='查找满配件空间站', command=self.full_outfitting_window).pack(side='left', padx=4)
 
         self.hint_var = tk.StringVar(
             value="第三格可下拉/打字联想/点“选值…”多选 (选项≤30个直接下拉)。船/模块名打字联想+自动纠错，行内自带新鲜度选择。")

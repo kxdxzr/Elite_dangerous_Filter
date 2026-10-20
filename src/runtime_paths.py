@@ -7,7 +7,9 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parents[1]
 CACHE_NAMES = {'field_values_cache.json', 'module_specs_cache.json', 'route_module_cache.json',
                'full_outfitting_catalog_v1.json', 'full_outfitting_catalog_v2.json',
-               'full_outfitting_catalog_v3.json', 'full_outfitting_catalog_v4.json'}
+               'full_outfitting_catalog_v3.json', 'full_outfitting_catalog_v4.json',
+               'full_outfitting_snapshot_v1.json',
+               'full_outfitting_coordinates_v1.json'}
 DATA_NAMES = {'last_session.json', 'route_ship_favorites.json'}
 
 
