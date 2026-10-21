@@ -1,7 +1,6 @@
 """会话JSON读写；原子替换避免异常中断时留下半个文件。"""
 import json
-import os
-import tempfile
+from file_io import atomic_write
 
 
 def load(path):
@@ -14,17 +13,4 @@ def load(path):
 
 
 def save(path, state):
-    directory = os.path.dirname(os.path.abspath(path))
-    os.makedirs(directory, exist_ok=True)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=directory,
-                                         prefix=".session-", suffix=".tmp", delete=False) as file:
-            temporary = file.name
-            json.dump(state, file, ensure_ascii=False, indent=1)
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary and os.path.exists(temporary):
-            os.remove(temporary)
+    atomic_write(path, json.dumps(state, ensure_ascii=False, indent=1).encode('utf-8'))

@@ -1,6 +1,7 @@
 """English translations keyed by canonical Chinese UI text. Data only."""
 
 CATALOG = {
+    'Power（关联势力，已停用）': 'Power (associated; disabled)',
     '等待查询': 'Ready',
     '已结束／未完成，详见状态': 'Stopped / incomplete; see status',
     '当前阶段': 'Current stage',

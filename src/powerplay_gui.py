@@ -56,15 +56,23 @@ def open_window(app, data_age):
     describe_source()
     options = ttk.Frame(win, padding=(8, 0))
     options.pack(fill="x")
-    ttk.Label(options, text="Power（关联势力）").pack(side="left")
+    power_label = ttk.Label(options, text="Power（关联势力）")
+    power_label.pack(side="left")
     power = tk.StringVar(value=tool.POWER_LABELS[tool.POWERS[0]])
     cb_power = ttk.Combobox(options, textvariable=power, state="readonly", width=36,
                             values=[tool.POWER_LABELS[p] for p in tool.POWERS])
     cb_power.pack(side="left", padx=4, fill='x', expand=True)
     all_powers = tk.BooleanVar(value=False)
-    ttk.Checkbutton(options, text="全势力扫描（12个）", variable=all_powers,
-                    command=lambda: cb_power.configure(state="disabled" if all_powers.get()
-                                                        else "readonly")).pack(side="left", padx=8)
+
+    def sync_power_state():
+        disabled = all_powers.get()
+        cb_power.configure(state='disabled' if disabled else 'readonly')
+        power_label.configure(text='Power（关联势力，已停用）' if disabled else 'Power（关联势力）')
+
+    all_powers_toggle = ttk.Checkbutton(options, text="全势力扫描（12个）", variable=all_powers,
+                                       command=sync_power_state)
+    all_powers_toggle.pack(side="left", padx=8)
+    win.power_selector, win.power_label, win.all_powers_toggle = cb_power, power_label, all_powers_toggle
     neutron_only = tk.BooleanVar(win, value=False)
     # Fixed-range position estimates, independent of ship-specific exact routing.
     if tool.ENABLE_NEUTRON_FILTER:
@@ -271,7 +279,7 @@ def open_window(app, data_age):
         reference.set("Ngurii")
     if not tool.ENABLE_NEUTRON_FILTER:
         neutron_only.set(False)
-    cb_power.configure(state="disabled" if all_powers.get() else "readonly")
+    sync_power_state()
 
     def close():
         stop.set()

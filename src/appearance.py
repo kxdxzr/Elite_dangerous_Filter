@@ -10,11 +10,11 @@ PALETTES = {
     'light': dict(bg='#f3f5f9', surface='#ffffff', alternate='#edf2f8',
                   text='#202b3c', muted='#58677c', border='#cbd5e1',
                   accent='#205ecf', hover='#174dac', selected='#ffffff',
-                  disabled='#65748a', warning='#895000'),
+                  disabled='#65748a', disabled_surface='#e0e5ed', disabled_border='#b9c3d1', warning='#895000'),
     'dark': dict(bg='#171e29', surface='#202a38', alternate='#263344',
                  text='#e7edf7', muted='#a8b7cd', border='#43536a',
                  accent='#3574dc', hover='#4484ec', selected='#ffffff',
-                 disabled='#96a6bd', warning='#f2bf65'),
+                 disabled='#96a6bd', disabled_surface='#101620', disabled_border='#303b4d', warning='#f2bf65'),
 }
 
 
@@ -120,15 +120,22 @@ class Appearance:
             s.configure(name, padding=5, foreground=p['text'], fieldbackground=p['surface'],
                         background=p['surface'], insertcolor=p['text'],
                         arrowcolor=p['text'], borderwidth=1)
-            s.map(name, fieldbackground=[('disabled', p['alternate']),
+            s.map(name, fieldbackground=[('disabled', p['disabled_surface']),
                                          ('readonly', p['surface'])],
                   foreground=[('disabled', p['disabled']), ('readonly', p['text'])],
-                  background=[('disabled', p['alternate']), ('active', p['alternate'])],
-                  bordercolor=[('focus', p['accent'])],
+                  background=[('disabled', p['disabled_surface']), ('active', p['alternate'])],
+                  bordercolor=[('disabled', p['disabled_border']), ('focus', p['accent'])],
+                  arrowcolor=[('disabled', p['disabled']), ('!disabled', p['text'])],
                   selectbackground=[('!disabled', p['accent'])],
                   selectforeground=[('!disabled', p['selected'])])
+        # Clam's default indicator is a small fixed pixel box even when fonts
+        # scale with Windows DPI. Size the actual indicator, not just its row.
+        line_height = font.nametofont('TkDefaultFont', root=self.root).metrics('linespace')
+        indicator_size = max(14, round(line_height * .85))
+        indicator_gap = max(5, round(line_height * .25))
         for name in ('TCheckbutton', 'TRadiobutton'):
-            s.configure(name, padding=(2, 4), background=p['bg'], foreground=p['text'])
+            s.configure(name, padding=(2, 4), background=p['bg'], foreground=p['text'],
+                        indicatorsize=indicator_size, indicatormargin=(0, 0, indicator_gap, 0))
             s.map(name, background=[('active', p['bg'])],
                   foreground=[('disabled', p['disabled'])],
                   indicatorbackground=[('disabled', p['alternate']),
@@ -169,7 +176,7 @@ class Appearance:
         if widget_class == 'Entry':
             return dict(background=p['surface'], foreground=p['text'],
                         insertbackground=p['text'], selectbackground=p['accent'],
-                        selectforeground=p['selected'], disabledbackground=p['alternate'],
+                        selectforeground=p['selected'], disabledbackground=p['disabled_surface'],
                         disabledforeground=p['disabled'], readonlybackground=p['surface'],
                         highlightbackground=p['border'], highlightcolor=p['accent'],
                         relief='flat', borderwidth=1)

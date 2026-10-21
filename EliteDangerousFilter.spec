@@ -1,7 +1,22 @@
 # Build: python -m PyInstaller --noconfirm --clean EliteDangerousFilter.spec
 from pathlib import Path
+import runpy
+from PyInstaller.utils.win32.versioninfo import (
+    VSVersionInfo, FixedFileInfo, StringFileInfo, StringTable, StringStruct, VarFileInfo, VarStruct,
+)
 
 project = Path(SPECPATH)
+# Read build metadata without importing the application, Tk or its runtime paths.
+metadata = runpy.run_path(str(project / 'src' / 'app_metadata.py'))
+fields = metadata['windows_version_fields']()
+version_info = VSVersionInfo(
+    ffi=FixedFileInfo(filevers=fields['filevers'], prodvers=fields['prodvers'],
+                      mask=0x3f, flags=fields['flags'], OS=0x40004,
+                      fileType=0x1, subtype=0x0, date=(0, 0)),
+    kids=[StringFileInfo([StringTable('040904B0', [
+        StringStruct(key, value) for key, value in fields['strings'].items()
+    ])]), VarFileInfo([VarStruct('Translation', [0x0409, 1200])])],
+)
 a = Analysis(
     [str(project / "src" / "filter_gui.py")],
     pathex=[str(project / "src")],
@@ -38,6 +53,6 @@ exe = EXE(
     upx=False,
     console=False,
     manifest=str(project / "EliteDangerousFilter.manifest"),
-    version=str(project / "EliteDangerousFilter.version.txt"),
+    version=version_info,
     disable_windowed_traceback=False,
 )

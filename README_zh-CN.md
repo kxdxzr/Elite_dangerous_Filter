@@ -155,7 +155,7 @@ python -m pip install -r requirements-build.txt
 python -m PyInstaller --noconfirm --clean EliteDangerousFilter.spec
 ```
 
-默认输出为项目下的 **`dist/EliteDangerousFilter.exe`**；Windows 版本资源在 `EliteDangerousFilter.version.txt`，需与 `src/export_metadata.py` 同步。版本资源不是代码签名。
+默认输出为项目下的 **`dist/EliteDangerousFilter.exe`**；程序身份及版本只在 `src/app_metadata.py` 维护，构建时从与CSV相同的数据派生Windows版本资源，无需另改版本文件。版本资源不是代码签名。
 
 实际 EXE 支持 `--smoke-test <报告.json>`、`--session-test write <报告.json>`、`--session-test read <另一报告.json>`；会话写入／读取须分进程运行，设置独立 `ELITE_FILTER_DATA_DIR`，提前创建报告目录，避免覆盖个人会话。Tk 测试需要图形环境；CI 覆盖 Windows／Ubuntu、Python 3.10／3.13。
 

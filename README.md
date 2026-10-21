@@ -155,7 +155,7 @@ python -m pip install -r requirements-build.txt
 python -m PyInstaller --noconfirm --clean EliteDangerousFilter.spec
 ```
 
-Default output: **`dist/EliteDangerousFilter.exe`** inside the project. Keep `EliteDangerousFilter.version.txt` in sync with `src/export_metadata.py`; Windows version resources are not code signatures.
+Default output: **`dist/EliteDangerousFilter.exe`** inside the project. Application identity and version live in `src/app_metadata.py`; the build derives Windows version resources from the same data used by CSV exports. Version resources are not code signatures.
 
 The actual EXE supports `--smoke-test <report.json>`, `--session-test write <report.json>` and `--session-test read <another-report.json>`. Run session write/read in separate processes with an isolated `ELITE_FILTER_DATA_DIR`; create report directories first to avoid touching personal sessions. Tk tests require a graphical display. CI covers Windows/Ubuntu and Python 3.10/3.13.
 

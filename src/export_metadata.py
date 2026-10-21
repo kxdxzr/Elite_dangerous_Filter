@@ -1,11 +1,7 @@
 """Shared provenance preamble for CSV exports (not result records)."""
 from datetime import datetime
 from i18n import translate
-
-PROJECT_AUTHOR = 'kxdxzr'
-PROJECT_NAME = 'Elite_dangerous_Filter'
-PROJECT_VERSION = '0.1.4'
-PROJECT_URL = 'https://github.com/kxdxzr/Elite_dangerous_Filter'
+from app_metadata import PROJECT_AUTHOR, PROJECT_NAME, PROJECT_VERSION, PROJECT_URL
 
 
 def write_csv_provenance(writer, column_count, language='zh', search_conditions=None, metadata_rows=None):

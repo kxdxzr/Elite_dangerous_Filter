@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 import filter_gui as gui
 import session_store
+import file_io
 
 
 class Value:
@@ -58,7 +59,7 @@ class SessionStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "last_session.json"
             session_store.save(path, dict(want="17"))
-            with patch.object(session_store.os, "replace", side_effect=OSError("disk failure")):
+            with patch.object(file_io.os, "replace", side_effect=OSError("disk failure")):
                 with self.assertRaises(OSError):
                     session_store.save(path, dict(want="99"))
             self.assertEqual(session_store.load(path), dict(want="17"))

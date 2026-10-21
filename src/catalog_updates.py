@@ -5,12 +5,12 @@ import json
 import os
 from pathlib import Path
 import re
-import tempfile
 import threading
 import urllib.parse
 import urllib.request
 
 from runtime_paths import data_file
+from file_io import atomic_write
 
 REPOSITORY = 'kxdxzr/Elite_dangerous_Filter'
 API = f'https://api.github.com/repos/{REPOSITORY}/releases?per_page=10'
@@ -102,21 +102,6 @@ def read_package(filename=ACTIVE):
     if path.stat().st_size > LIMIT:
         raise ValueError('本地清单文件过大')
     return validate(json.loads(path.read_text(encoding='utf-8')))
-
-
-def atomic_write(path, content):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, name = tempfile.mkstemp(dir=path.parent, prefix=path.name + '.', suffix='.tmp')
-    try:
-        with os.fdopen(fd, 'wb') as stream:
-            stream.write(content)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(name, path)
-    finally:
-        if os.path.exists(name):
-            os.unlink(name)
 
 
 def check(fetch=download):

@@ -90,6 +90,62 @@ class AppearanceGuiTests(unittest.TestCase):
             self.assertEqual(before['conditions'], after['conditions'])
             self.assertEqual(before['tools'], after['tools'])
 
+    def test_checkbox_indicators_scale_with_font_in_all_languages_and_themes(self):
+        from tkinter import font
+        window = gui.Toplevel(self.root)
+        checkbox = gui.ttk.Checkbutton(window, text='全部联邦船')
+        checkbox.pack(padx=8, pady=8)
+        window.deiconify()
+        for mode in ('light', 'dark'):
+            self.app.set_appearance(mode)
+            for language in ('zh', 'en'):
+                self.app.set_language(language)
+                self.root.update()
+                line_height = font.nametofont('TkDefaultFont', root=self.root).metrics('linespace')
+                expected = max(14, round(line_height * .85))
+                for style in ('TCheckbutton', 'TRadiobutton'):
+                    self.assertEqual(int(self.app.appearance_manager.style.lookup(style, 'indicatorsize')), expected)
+                # Check actual rendered hit-test geometry, not only style settings.
+                middle = checkbox.winfo_height() // 2
+                pixels = [x for x in range(checkbox.winfo_width())
+                          if 'indicator' in checkbox.identify(x, middle)]
+                self.assertGreaterEqual(len(pixels), expected)
+                checkbox.invoke()
+                self.root.update_idletasks()
+        window.destroy()
+
+    def test_all_tools_use_readable_checkbox_sizes_without_clipping_labels(self):
+        methods = ('rare_goods_window', 'pve_window', 'colonisation_window',
+                   'carrier_parking_window', 'midpoint_window',
+                   'engineer_shopping_window', 'full_outfitting_window')
+
+        def checkboxes(parent):
+            for child in parent.winfo_children():
+                if isinstance(child, gui.ttk.Checkbutton):
+                    yield child
+                yield from checkboxes(child)
+
+        count = 0
+        for method in methods:
+            before = set(self.root.winfo_children())
+            window = getattr(self.app, method)()
+            if window is None:
+                window = next(child for child in self.root.winfo_children()
+                              if child not in before and isinstance(child, gui.tk.Toplevel))
+            for language in ('zh', 'en'):
+                self.app.set_language(language)
+                window.deiconify()
+                self.root.update()
+                for checkbox in checkboxes(window):
+                    count += 1
+                    with self.subTest(tool=method, language=language, text=checkbox.cget('text')):
+                        self.assertGreaterEqual(checkbox.winfo_width(), checkbox.winfo_reqwidth())
+                        pixels = [x for x in range(min(80, checkbox.winfo_width()))
+                                  if 'indicator' in checkbox.identify(x, checkbox.winfo_height() // 2)]
+                        self.assertGreaterEqual(len(pixels), 14)
+            window.destroy()
+        self.assertGreaterEqual(count, 30)
+
     def test_actual_selector_saves_canonical_value_and_restart_restores_it(self):
         self.app.set_language('en')
         self.app.appearance_box._display.set('Dark')
@@ -176,6 +232,44 @@ class AppearanceGuiTests(unittest.TestCase):
             self.assertEqual(style.lookup('Muted.TLabel', 'foreground'), p['muted'])
             self.assertEqual(style.lookup('Warning.TLabel', 'foreground'), p['warning'])
         window.destroy()
+
+    def test_rare_goods_disabled_power_is_distinct_and_keeps_selection(self):
+        self.app.rare_goods_window()
+        window = next(child for child in self.root.winfo_children() if hasattr(child, 'power_selector'))
+        selector = window.power_selector
+        power = window.session_variables['power']
+        original = power.get()
+        for mode in ('dark', 'light'):
+            self.app.set_appearance(mode)
+            palette = appearance.PALETTES[mode]
+            for language in ('zh', 'en'):
+                self.app.set_language(language)
+                self.assertEqual(str(selector.cget('state')), 'readonly')
+                window.all_powers_toggle.invoke()
+                self.root.update_idletasks()
+                self.assertEqual(str(selector.cget('state')), 'disabled')
+                self.assertIn('已停用' if language == 'zh' else 'disabled', window.power_label.cget('text'))
+                style = self.app.appearance_manager.style
+                for control in ('TEntry', 'TCombobox', 'TSpinbox'):
+                    self.assertEqual(style.lookup(control, 'fieldbackground', ('disabled', 'readonly', 'focus')),
+                                     palette['disabled_surface'])
+                    self.assertNotEqual(palette['disabled_surface'], palette['surface'])
+                    self.assertEqual(style.lookup(control, 'bordercolor', ('disabled', 'focus')),
+                                     palette['disabled_border'])
+                self.assertEqual(style.lookup('TCombobox', 'arrowcolor', ('disabled',)), palette['disabled'])
+                self.assertEqual(power.get(), original)
+                window.all_powers_toggle.invoke()
+                self.assertEqual(str(selector.cget('state')), 'readonly')
+                self.assertEqual(power.get(), original)
+        window.all_powers_toggle.invoke()
+        self.app._tool_states['rare_goods'] = self.app._state_dict()['tools']['rare_goods']
+        window.destroy()
+        self.app.rare_goods_window()
+        restored = next(child for child in self.root.winfo_children() if hasattr(child, 'power_selector'))
+        self.assertEqual(str(restored.power_selector.cget('state')), 'disabled')
+        self.assertIn('disabled', restored.power_label.cget('text'))
+        self.assertEqual(restored.session_variables['power'].get(), original)
+        restored.destroy()
 
     def test_tcl_owned_combobox_popdown_updates_while_open(self):
         self.root.deiconify()

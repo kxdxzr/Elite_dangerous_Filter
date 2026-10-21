@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 import threading
 
-import catalog_updates
+from file_io import atomic_write
 import full_outfitting as tool
 import outfitting_catalog as catalogue
 from runtime_paths import data_file
@@ -42,7 +42,7 @@ def read():
         # Reuse a valid fixed-scope v1 snapshot without re-querying inventory.
         # Upgrade in place, retaining the original inventory time and records.
         data['schema'] = SCHEMA
-        catalog_updates.atomic_write(path, json.dumps(data, ensure_ascii=False, allow_nan=False).encode('utf-8'))
+        atomic_write(path, json.dumps(data, ensure_ascii=False, allow_nan=False).encode('utf-8'))
     return data
 
 
@@ -93,7 +93,7 @@ def distance_context(snapshot, criteria, stop=None, progress=None):
                 raise ValueError('缓存站点缺少星系名称，无法重算距离')
             resolve(row['system_name'])
     if {name: list(point) for name, point in coords.items()} != cached:
-        catalog_updates.atomic_write(path, json.dumps(coords, ensure_ascii=False).encode('utf-8'))
+        atomic_write(path, json.dumps(coords, ensure_ascii=False).encode('utf-8'))
     return reference, coords
 
 
@@ -186,7 +186,7 @@ def search(criteria, want=50, max_pages=25, stop=None, progress=None, refresh=Fa
             if len(content) > MAX_BYTES:
                 raise ValueError('库存快照过大，原快照未替换')
             catalogue.check_stop(stop)
-            catalog_updates.atomic_write(data_file(NAME), content)
+            atomic_write(data_file(NAME), content)
         reference, coords = distance_context(snapshot, criteria, stop, progress)
         return filter_snapshot(snapshot, criteria, want, max_pages, stop, progress,
                                reference_coords=reference, system_coords=coords)
