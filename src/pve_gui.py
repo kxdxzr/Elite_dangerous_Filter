@@ -77,15 +77,15 @@ def open_window(app):
         button = ttk.Checkbutton(actions, text=text, variable=variables[key])
         button.pack(side='left', padx=4)
         action_widgets[key] = button
-    ttk.Label(form, text=NOTE_CN, wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
-    ttk.Label(form, text='距离留空不限；来源停机坪与距离须同站满足。星环距离为最近已知有环天体的到达 Ls，不是具体 RES 位置。', wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
+    from usage_help import usage_help
+    win.usage_help = usage_help(form, (
+        NOTE_CN,
+        '距离留空不限；来源停机坪与距离须同站满足。星环距离为最近已知有环天体的到达 Ls，不是具体 RES 位置。',
+        '未知目标自动用 Spansh 天体数据复核星环（距离留空也复核）；未查到星环则排除，查询失败或数据不完整仍为未知。',
+        '补充的 RES 星系按目标距离、目标控制小派系筛选；有已知任务来源的优先，未收录显示无数据。',
+        '最少任务派系数为0：保留任务结果并补充 RES 星系；1–8：仅检索海盗任务。0时来源条件停用但保留。',
+    ))
     ttk.Label(form, textvariable=faction_feedback, style='Muted.TLabel').pack(fill='x', padx=8)
-    ttk.Label(form, text='未知目标自动用 Spansh 天体数据复核星环（距离留空也复核）；未查到星环则排除，查询失败或数据不完整仍为未知。',
-              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
-    ttk.Label(form, text='补充的 RES 星系按目标距离、目标控制小派系筛选；有已知任务来源的优先，未收录显示无数据。',
-              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
-    ttk.Label(form, text='最少任务派系数为0：保留任务结果并补充 RES 星系；1–8：仅检索海盗任务。0时来源条件停用但保留。',
-              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
     status = tk.StringVar(win, value='半径针对任务来源星系；0 不限制距离。有环推定 RES；情况未知单独标注，不作为无 RES 的证据。')
     ttk.Label(win, textvariable=status, wraplength=1360).pack(fill='x', padx=8, pady=4)
     progress = ttk.Progressbar(win, mode='indeterminate')

@@ -148,12 +148,13 @@ def open_window(app):
             section.columnconfigure(index, weight=1)
     controls.columnconfigure(0, weight=1)
     controls.columnconfigure(1, weight=1)
-    ttk.Label(win, text='两套距离独立且同时启用时为 AND；最近距离先找最近人口达标星系，再判断上下限，包含边界。',
-              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
+    from usage_help import usage_help
+    win.usage_help = usage_help(win, (
+        '两套距离独立且同时启用时为 AND；最近距离先找最近人口达标星系，再判断上下限，包含边界。',
+        'in 多选及 between 范围用 | 分隔；布尔值用 true / false。互绕按共同直接质心和相同周期推定，复杂／缺失关系为未知。',
+    ))
     ttk.Label(win, text='强制：零人口、无任何站点（含航母）、明确无需许可。可选数值留空不限，0 是实际阈值。',
               wraplength=1360).pack(fill='x', padx=8)
-    ttk.Label(win, text='in 多选及 between 范围用 | 分隔；布尔值用 true / false。互绕按共同直接质心和相同周期推定，复杂／缺失关系为未知。',
-              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
     tabs = ttk.Notebook(win)
     tabs.pack(fill='x', padx=8, pady=5)
     body_tab, ring_tab = ttk.Frame(tabs), ttk.Frame(tabs)
@@ -217,7 +218,6 @@ def open_window(app):
     state = {'rows': [], 'info': None, 'busy': False, 'progress': ''}
 
     def render_status():
-        en = app.localizer.language == 'en'
         info = state['info']
         if info:
             reasons = {
@@ -227,10 +227,9 @@ def open_window(app):
                 'Repeated system page; results are incomplete.': '服务器返回重复分页，结果不完整。',
                 'Search cancelled; results are incomplete.': '已停止，结果不完整。',
             }
-            if en:
-                text = f"Scanned: {info['scanned']:,}; matches: {len(state['rows']):,}; unknown: {info['unknown']:,}. {info['reason']}"
-            else:
-                text = f"扫描 {info['scanned']:,}；匹配 {len(state['rows']):,}；数据未知 {info['unknown']:,}。" + reasons.get(info['reason'], info['reason'])
+            text = app.localizer.message('colonisation.summary', scanned=info['scanned'],
+                                         matches=len(state['rows']), unknown=info['unknown'],
+                                         reason=app.localizer.tr(reasons.get(info['reason'], info['reason'])))
             status.set(text)
         elif state['busy']:
             text = state['progress']
@@ -238,12 +237,11 @@ def open_window(app):
             batch = re.fullmatch(r'Body batches (\d+)/(\d+); matches (\d+)', text)
             if page:
                 a, scanned, hits = map(int, page.groups())
-                text = (f'Page {a:,}; scanned {scanned:,}; matches {hits:,}' if en else
-                        f'分页 {a:,}；已扫描 {scanned:,}；匹配 {hits:,}')
-            elif not en and batch:
+                text = app.localizer.message('colonisation.page', page=a, scanned=scanned, matches=hits)
+            elif batch:
                 a, b, hits = batch.groups()
-                text = f'天体批次 {a}/{b}；匹配 {hits}'
-            status.set(text or ('Searching...' if en else '查询中...'))
+                text = app.localizer.message('colonisation.batch', done=a, total=b, matches=hits)
+            status.set(text or app.localizer.tr('查询中...'))
     app.localizer.register(render_status)
 
     def criteria():

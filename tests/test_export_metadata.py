@@ -24,6 +24,17 @@ def assert_provenance(test, rows, width):
 
 
 class ExportMetadataTests(unittest.TestCase):
+    def test_extra_context_precedes_conditions_without_changing_standard_provenance(self):
+        output = io.StringIO(newline='')
+        metadata.write_csv_provenance(csv.writer(output), 3, 'en',
+                                      search_conditions='Reference: Sol',
+                                      metadata_rows=[('Catalogue version', 'test'), ('Stock sources', 'Spansh')])
+        rows = list(csv.reader(io.StringIO(output.getvalue())))
+        self.assertEqual(rows[5], ['# Catalogue version', 'test', ''])
+        self.assertEqual(rows[6], ['# Stock sources', 'Spansh', ''])
+        self.assertEqual(rows[7], ['# Search conditions', 'Reference: Sol', ''])
+        self.assertEqual(rows[8], [])
+
     def test_search_conditions_are_last_preamble_row_before_separator(self):
         output = io.StringIO(newline='')
         writer = csv.writer(output)

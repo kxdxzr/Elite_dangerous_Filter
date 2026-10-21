@@ -242,8 +242,13 @@ class AppearanceGuiTests(unittest.TestCase):
                     self.assertTrue(window.result_tree.winfo_ismapped())
                     self.assertGreater(window.result_tree.winfo_height(), 100)
                     if method == 'pve_window':
+                        # Notes now live in on-demand help; the compact form may fit.
+                        bounds = tuple(map(float, window.settings_canvas.cget('scrollregion').split()))
                         window.settings_canvas.yview_moveto(1)
-                        self.assertGreater(window.settings_canvas.yview()[0], 0)
+                        if bounds[3] - bounds[1] > window.settings_canvas.winfo_height():
+                            self.assertGreater(window.settings_canvas.yview()[0], 0)
+                        else:
+                            self.assertEqual(window.settings_canvas.yview(), (0.0, 1.0))
                         window.settings_canvas.yview_moveto(0)
                     else:
                         self.assertFalse(hasattr(window, 'settings_canvas'))

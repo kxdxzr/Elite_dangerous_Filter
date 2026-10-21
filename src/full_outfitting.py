@@ -544,13 +544,43 @@ COLUMNS = [('system_name', '星系'), ('name', '站点'), ('distance', '距离 l
            ('distance_to_arrival', '到站距离 Ls'), ('coverage', '已知规格覆盖'),
             ('discount', '公共折扣'), ('discount_scope', '已知优惠范围'), ('sources', '优惠来源'),
            ('guardian', 'Guardian 科技经纪人'), ('permit', '许可'),
-           ('outfitting_updated_at', '配件库存更新时间'), ('catalog_revision', '目录事实版本'),
-           ('catalog_built_at', '目录核验时间'), ('eligibility', '购买资格假设'), ('ship_requirements', '舰船条件'),
-           ('search_status', '检索完整性'), ('special_requirements', '特殊装备条件'), ('stock_sources', '库存核验来源'),
-            ('identity_revision', '物品ID目录版本'), ('discount_requirement', '折扣要求'),
-            ('ax_requirements', 'AX装备条件'), ('catalog_rules_version', '目录规则版本'),
-            ('catalog_sources', '目录事实来源'), ('universal_requirements', '通用无人机控制器条件'),
-            ('snapshot_created_at', '库存快照时间'), ('snapshot_scope_text', '库存快照范围')]
+           ('outfitting_updated_at', '配件库存更新时间')]
+
+
+def export_context(result, tr=lambda text: text):
+    """Query-wide metadata belongs before the station table, not on every row."""
+    result = result or {}
+    criteria = result.get('criteria', {})
+    groups = [tr(label) for name, label in (('neutral_ships', '全部非势力船（含联盟）'),
+              ('federal_ships', '全部联邦船'), ('imperial_ships', '全部帝国船')) if criteria.get(name)]
+    scope = result.get('snapshot_scope', {})
+    fields = [
+        ('目录事实版本', result.get('catalog_revision')),
+        ('目录核验时间', result.get('catalog_built_at')),
+        ('目录规则版本', result.get('catalog_rules_version', 'bundled')),
+        ('目录事实来源', '; '.join(result.get('catalog_sources', []))),
+        ('物品ID目录版本', result.get('identity_revision')),
+        ('库存快照时间', result.get('snapshot_created_at')),
+        ('库存快照范围', f"{scope.get('reference', '')} / {scope.get('radius', '')} ly" if scope else None),
+        ('舰船条件', '; '.join(groups)),
+        ('特殊装备条件', tr('Merc Coins 特殊装备齐全（仅库存）' if criteria.get('special_equipment') else '不要求特殊装备')),
+        ('折扣要求', tr('必须全配件公共折扣' if criteria.get('require_discount') else '不要求折扣')),
+        ('AX装备条件', tr('AX装备规格齐全' if criteria.get('ax_weapons') else '不要求AX装备')),
+        ('通用无人机控制器条件', tr('要求通用无人机控制器7A及7C' if criteria.get('universal_limpets')
+                                    else '不要求通用无人机控制器7A及7C')),
+        ('检索完整性', tr('部分结果' if result.get('partial') or result.get('stopped') else
+                         '已有站点名单筛选完成' if result.get('snapshot_local') else '候选分页已取完')),
+    ]
+    sources = {}
+    for row in result.get('rows', []):
+        names = tuple(sorted(set(row.get('_stock_sources', ['Spansh']))))
+        sources.setdefault(names, []).append(f"{row.get('system_name', '-')} / {row.get('name', '-')}")
+    for names, stations in sources.items():
+        value = '; '.join(tr(name) for name in names)
+        if len(sources) > 1:
+            value += ': ' + '; '.join(stations)
+        fields.append(('库存核验来源', value))
+    return [(tr(label), value if value not in (None, '') else tr('未记录')) for label, value in fields]
 
 
 def export_search_conditions(result, tr=lambda text: text):
@@ -597,9 +627,6 @@ def export_table(result, tr=lambda text: text):
         if evidence.get('surcharge'):
             discount = tr('公共加价') + f" {evidence['surcharge']}%"
             discount_scope = tr('全配件公共加价')
-        criteria = (result or {}).get('criteria', {})
-        groups = [tr(label) for name, label in (('neutral_ships', '全部非势力船（含联盟）'),
-                  ('federal_ships', '全部联邦船'), ('imperial_ships', '全部帝国船')) if criteria.get(name)]
         values = dict(row, distance=format_ly(row.get('distance')), coverage=f"{evidence['present']}/{evidence['required']}",
                       distance_to_arrival=format_ls(row.get('distance_to_arrival')),
                       discount=discount, discount_scope=discount_scope,
@@ -608,25 +635,6 @@ def export_table(result, tr=lambda text: text):
                                    or isinstance(row.get('services'), list) and row['services']
                                    and not any(key(item.get('name') if isinstance(item, dict) else item) == key('Technology Broker')
                                                for item in row['services']) else 'Spansh未提供'),
-                      ship_requirements='; '.join(groups) or '-',
-                       catalog_revision=(result or {}).get('catalog_revision', ''),
-                       catalog_rules_version=(result or {}).get('catalog_rules_version', 'bundled'),
-                       catalog_sources='; '.join((result or {}).get('catalog_sources', [])),
-                       snapshot_created_at=(result or {}).get('snapshot_created_at', ''),
-                       snapshot_scope_text=(f"{result['snapshot_scope'].get('reference', '')} / "
-                                            f"{result['snapshot_scope'].get('radius', '')} ly"
-                                            if result.get('snapshot_scope') else ''),
-                      identity_revision=(result or {}).get('identity_revision', ''),
-                      catalog_built_at=(result or {}).get('catalog_built_at', ''),
-                      eligibility=tr('默认已有全部 Power 配件购买资格'),
-                      discount_requirement=tr('必须全配件公共折扣' if criteria.get('require_discount') else '不要求折扣'),
-                      stock_sources='; '.join(tr(source) for source in row.get('_stock_sources', ['Spansh'])),
-                       special_requirements=tr('Merc Coins 特殊装备齐全（仅库存）' if criteria.get('special_equipment') else '不要求特殊装备'),
-                       ax_requirements=tr('AX装备规格齐全' if criteria.get('ax_weapons') else '不要求AX装备'),
-                       universal_requirements=tr('要求通用无人机控制器7A及7C' if criteria.get('universal_limpets')
-                                                 else '不要求通用无人机控制器7A及7C'),
-                       search_status=tr('部分结果' if result.get('partial') else
-                                        '已有站点名单筛选完成' if result.get('snapshot_local') else '候选分页已取完'),
                       permit=tr('需许可' if row.get('needs_permit') is True else
                                  '免许可' if row.get('needs_permit') is False else 'Spansh未提供'))
         for field in ('distance', 'distance_to_arrival', 'outfitting_updated_at'):

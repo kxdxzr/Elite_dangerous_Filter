@@ -14,7 +14,7 @@ import tkinter as tk
 from datetime import datetime, timezone
 from tkinter import filedialog
 from localized_tk import messagebox, ttk, Toplevel
-from i18n import Localizer
+from i18n import Localizer, LANGUAGES, SOURCE_LANGUAGE, normalize_language, language_code
 from appearance import Appearance, MODES
 
 try:
@@ -484,11 +484,6 @@ class Row:
             self.v_discount = tk.StringVar(value='不限')
             self.cb_discount = ttk.Combobox(self.subcontrols, textvariable=self.v_discount, width=6,
                                            values=['不限', '是'], state='readonly')
-            self.lbl_discount_bug = ttk.Label(self.subcontrols,
-                text='Archer 公共折扣因已报告的游戏 Bug 不计入；个人等级优惠另算', style='Muted.TLabel')
-            self.lbl_mahon_bug = ttk.Label(self.frame,
-                text='Mahon：普通货架／船体增强优惠保留；Guardian HRP／SRP 因已报告的游戏 Bug 不计入',
-                style='Muted.TLabel', wraplength=900)
             self.opt_info = tk.StringVar(value="")
             self.lbl_opt = ttk.Label(bar, textvariable=self.opt_info, width=10,
                                      style='Muted.TLabel')
@@ -634,10 +629,6 @@ class Row:
         if show:
             self._refresh_spec_options()
         self._toggle_fresh()
-        if show:
-            self.lbl_mahon_bug.pack(fill='x', padx=4, pady=(2, 0))
-        else:
-            self.lbl_mahon_bug.pack_forget()
         return show
 
     def _single_module_name(self):
@@ -707,7 +698,7 @@ class Row:
             self.subcontrols.pack(fill='x', pady=(3, 0))
         else:
             self.subcontrols.pack_forget()
-        for w in (self.lbl_fresh, self.cb_fresh, self.lbl_discount, self.cb_discount, self.lbl_discount_bug):
+        for w in (self.lbl_fresh, self.cb_fresh, self.lbl_discount, self.cb_discount):
             if show:
                 w.pack(side="left", padx=(4, 0))
             else:
@@ -1030,12 +1021,13 @@ class App:
         self.appearance_box.pack(side='left', padx=(0, 12))
         self.appearance_box.bind('<<ComboboxSelected>>', self._appearance_selected)
         ttk.Label(preferences, text='语言 / Language').pack(side='left', padx=(0, 6))
-        self.language = tk.StringVar(value='中文')
+        self.language = tk.StringVar(value=LANGUAGES[SOURCE_LANGUAGE])
         language_box = ttk.Combobox(preferences, textvariable=self.language,
-                                    values=['中文', 'English'], state='readonly', width=10)
+                                    values=list(LANGUAGES.values()), state='readonly',
+                                    width=max(10, max(map(len, LANGUAGES.values()))))
         language_box.pack(side='left')
         language_box.bind('<<ComboboxSelected>>', lambda e: self.set_language(
-            'en' if self.language.get() == 'English' else 'zh'))
+            language_code(self.language.get())))
 
         top = ttk.Frame(root, padding=(12, 6, 12, 4))
         top.pack(fill="x")
@@ -1069,8 +1061,13 @@ class App:
         details_bar = ttk.Frame(root, padding=(6, 2))
         details_bar.pack(fill='x')
         ttk.Button(details_bar, text='+ 天体／最近有人条件', command=self.add_system_details).pack(side='left', padx=4)
-        ttk.Label(details_bar, text='星系模式：数量用普通条件；天体组和最近有人距离用详细条件。',
-                  style='Muted.TLabel').pack(side='left', padx=4)
+        from usage_help import usage_help
+        self.usage_help = usage_help(details_bar, (
+            '星系模式：数量用普通条件；天体组和最近有人距离用详细条件。',
+            '第三格可下拉/打字联想/点“选值…”多选 (选项≤30个直接下拉)。船/模块名打字联想+自动纠错，行内自带新鲜度选择。',
+            'Archer 公共折扣因已报告的游戏 Bug 不计入；个人等级优惠另算',
+            'Mahon：普通货架／船体增强优惠保留；Guardian HRP／SRP 因已报告的游戏 Bug 不计入',
+        ), inline=True)
 
         extra = ttk.Frame(root, padding=(6, 0, 6, 6))
         extra.pack(fill="x")
@@ -1087,7 +1084,6 @@ class App:
 
         self.hint_var = tk.StringVar(
             value="第三格可下拉/打字联想/点“选值…”多选 (选项≤30个直接下拉)。船/模块名打字联想+自动纠错，行内自带新鲜度选择。")
-        ttk.Label(root, textvariable=self.hint_var, style='Muted.TLabel').pack(fill="x", padx=6)
 
         body = ttk.Frame(root)
         body.pack(fill="both", expand=True, padx=6)
@@ -1311,7 +1307,7 @@ class App:
                 "want": self.want.get(), "maxpages": self.maxpages.get(),
                 "rows": [r.editor_state() for r in self.rows if r.frame.winfo_exists()],
                 "tools": dict(self._tool_states),
-                "language": self.localizer.language if hasattr(self, "localizer") else "zh",
+                 "language": self.localizer.language if hasattr(self, "localizer") else SOURCE_LANGUAGE,
                 "appearance": self.appearance_manager.mode if hasattr(self, 'appearance_manager') else 'system'}
 
     def set_appearance(self, mode):
@@ -1324,9 +1320,8 @@ class App:
         self.save_session()
 
     def set_language(self, language):
-        if language not in ("zh", "en"):
-            language = "zh"
-        self.language.set("English" if language == "en" else "中文")
+        language = normalize_language(language)
+        self.language.set(LANGUAGES[language])
         self.localizer.set_language(language)
 
     def main_result_table(self):
@@ -1642,8 +1637,10 @@ class App:
         ttk.Entry(options, textvariable=maximum, width=7).pack(side="left", padx=4)
         ttk.Label(options, text="留空不限，包含边界").pack(side="left")
         ttk.Checkbutton(options, text="只显示确认免许可的星系", variable=no_permit).pack(side="left", padx=8)
-        ttk.Label(win, text="按站点类型统计 Spansh 已收录航母，不是实时数量或车位预测。类型数据不完整显示未知；数量筛选不包含未知结果。",
-                  wraplength=1020, style='Muted.TLabel').pack(fill="x", padx=8, pady=6)
+        from usage_help import usage_help
+        win.usage_help = usage_help(options, (
+            "按站点类型统计 Spansh 已收录航母，不是实时数量或车位预测。类型数据不完整显示未知；数量筛选不包含未知结果。",
+        ), inline=True)
         status = tk.StringVar(value="输入参考星系后查询；双击结果复制星系名。")
         ttk.Label(win, textvariable=status, wraplength=1020).pack(fill="x", padx=8)
         progressbar = ttk.Progressbar(win, mode='determinate')

@@ -134,6 +134,27 @@ class LocalizedGuiTests(unittest.TestCase):
         self.app.set_language('zh')
         self.assertEqual(row.cb_op._display.get(), '属于其一')
 
+    def test_registered_language_uses_existing_ui_and_session_paths(self):
+        from types import ModuleType
+        pack = ModuleType('translations.zz')
+        pack.CATALOG = {'使用说明': 'ZZ guide'}
+        pack.MESSAGES = {}
+        before = self.app._state_dict()
+        with patch.dict(i18n.LANGUAGES, {'zz': 'Test language'}), \
+                patch.dict(sys.modules, {'translations.zz': pack}):
+            try:
+                self.app.set_language('zz')
+                self.assertEqual(self.app.language.get(), 'Test language')
+                state = self.app._state_dict()
+                self.assertEqual(state['language'], 'zz')
+                self.assertEqual(state['conditions'], before['conditions'])
+                self.assertEqual(state['rows'], before['rows'])
+                self.assertEqual(self.app.usage_help.cget('text'), 'ZZ guide')
+                self.app._apply_state(state)
+                self.assertEqual(self.app.localizer.language, 'zz')
+            finally:
+                self.app.set_language('zh')
+
     def test_open_tools_switch_and_pve_state(self):
         self.app.set_language('en')
         self.app.rare_goods_window()

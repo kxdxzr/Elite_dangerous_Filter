@@ -78,6 +78,21 @@ class FullOutfittingGuiTests(unittest.TestCase):
         restored = self.app.full_outfitting_window()
         self.assertEqual(restored.criteria(), before)
 
+    def test_english_controls_have_space_and_preserve_values(self):
+        win = self.app.full_outfitting_window()
+        before = win.criteria()
+        self.app.set_language('en')
+        win.geometry('1100x820')
+        self.root.update()
+        for entry in win.criteria_entries.values():
+            self.assertEqual(int(entry.grid_info()['row']), 1)
+            self.assertGreaterEqual(int(entry.cget('width')), 12)
+        self.assertEqual({(int(c.grid_info()['row']), int(c.grid_info()['column']))
+                          for c in win.ship_choices}, {(0, 0), (0, 1), (1, 0), (1, 1)})
+        for choice in win.ship_choices:
+            self.assertGreaterEqual(choice.winfo_width(), choice.winfo_reqwidth())
+        self.assertEqual(win.criteria(), before)
+
     def test_worker_result_snapshot_and_result_table_survives_small_window(self):
         win = self.app.full_outfitting_window()
         row = dict(name='Jameson Memorial', system_name='Shinrarta Dezhra', distance=10,
@@ -132,12 +147,17 @@ class FullOutfittingGuiTests(unittest.TestCase):
                 win.export_csv()
             with path.open(encoding='utf-8-sig', newline='') as file:
                 rows = list(csv.reader(file))
-        self.assertEqual(rows[5][0], '# 检索条件')
-        self.assertIn('参考星系: Sol', rows[5][1])
-        self.assertIn('检索半径 ly: 500', rows[5][1])
-        self.assertNotIn('Achenar', rows[5][1])
-        self.assertEqual(rows[6], [])
-        self.assertEqual(rows[7][0], '星系')
+        separator = rows.index([])
+        conditions = rows[separator - 1]
+        self.assertEqual(conditions[0], '# 检索条件')
+        self.assertIn('参考星系: Sol', conditions[1])
+        self.assertIn('检索半径 ly: 500', conditions[1])
+        self.assertNotIn('Achenar', conditions[1])
+        self.assertEqual(rows[separator + 1][0], '星系')
+        metadata = {row[0]: row[1] for row in rows[:separator]}
+        for label in ('特殊装备条件', '库存核验来源', '物品ID目录版本', '折扣要求', 'AX装备条件'):
+            self.assertIn('# ' + label, metadata)
+            self.assertNotIn(label, rows[separator + 1])
 
     def test_failed_data_update_keeps_previous_displayed_result(self):
         win = self.app.full_outfitting_window()

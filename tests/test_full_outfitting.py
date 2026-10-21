@@ -282,6 +282,28 @@ class FullOutfittingTests(unittest.TestCase):
         load.assert_not_called()
         self.assertTrue(result['stopped'])
 
+    def test_context_preserves_per_station_stock_sources_without_repeating_query_columns(self):
+        result = dict(rows=[
+            dict(system_name='Sol', name='Station A', _stock_sources=['Spansh']),
+            dict(system_name='Achenar', name='Station B', _stock_sources=['Spansh', 'EDSM']),
+        ], criteria=vars(tool.build_criteria('Sol', 500)), identity_revision='identity-test',
+            catalog_revision='catalog-test', partial=True)
+        before = copy.deepcopy(result)
+        fields = tool.export_context(result)
+        self.assertNotIn('购买资格假设', dict(fields))
+        self.assertEqual(dict(fields)['物品ID目录版本'], 'identity-test')
+        sources = [value for label, value in fields if label == '库存核验来源']
+        self.assertEqual(len(sources), 2)
+        self.assertIn('Spansh: Sol / Station A', sources)
+        self.assertTrue(any('EDSM' in value and 'Achenar / Station B' in value for value in sources))
+        headers = {label for _, label in tool.COLUMNS}
+        self.assertFalse(headers & {label for label, _ in fields})
+        self.assertEqual(result, before)
+
+    def test_common_stock_source_is_written_once_in_context(self):
+        fields = tool.export_context(dict(rows=[dict(name='A'), dict(name='B')]))
+        self.assertEqual([value for label, value in fields if label == '库存核验来源'], ['Spansh'])
+
     def test_csv_conditions_include_query_limits_and_all_optional_requirements(self):
         criteria = tool.build_criteria('Sol', 500, ax_weapons=True, universal_limpets=True,
                                        other_discounts=True, neutral_ships=True, guardian=True)
@@ -337,7 +359,8 @@ class FullOutfittingTests(unittest.TestCase):
         self.assertEqual(result['errors'][0]['page'], 2)
         self.assertEqual(result['errors'][0]['status'], 500)
         headers, records = tool.export_table(result, lambda value: value)
-        self.assertEqual(records[0][headers.index('检索完整性')], '部分结果')
+        self.assertNotIn('检索完整性', headers)
+        self.assertEqual(dict(tool.export_context(result))['检索完整性'], '部分结果')
 
     def test_independent_sources_continue_after_failure_and_share_page_budget(self):
         calls = []

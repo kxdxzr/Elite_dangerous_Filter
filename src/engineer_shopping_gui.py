@@ -176,23 +176,12 @@ def open_window(app):
         first.refresh_options()
     ttk.Button(purchase_actions, text='添加采购项', command=add_purchase).pack(side='left', padx=4, pady=3)
     ttk.Label(purchase_actions, text='同一站点须同时满足全部采购项；同一行多选名称也要求全部有货。').pack(side='left', padx=6)
-    notes = ttk.Frame(form)
-    show_notes = tk.BooleanVar(win, value=False)
-
-    def toggle_notes():
-        if show_notes.get():
-            notes.pack(fill='x')
-        else:
-            notes.pack_forget()
-
-    ttk.Checkbutton(purchase_actions, text='检索说明', variable=show_notes,
-                    command=toggle_notes).pack(side='right', padx=4)
-    ttk.Label(notes, text='前往工程师途中，寻找少绕路的模组／舰载武器售卖点，可筛选已知折扣。',
-              wraplength=1280).pack(fill='x', padx=12)
-    ttk.Label(notes, text='自动覆盖单跳和多跳；额外跳数相对直达估算。未验证实际航线，排序仅针对已取回的命中。',
-              wraplength=1280, style='Muted.TLabel').pack(fill='x', padx=12)
-    ttk.Label(notes, text='每项独立选择规格、折扣和新鲜度；到站距离留空不限，不核实购买数量。',
-               style='Muted.TLabel').pack(fill='x', padx=12)
+    from usage_help import usage_help
+    win.usage_help = usage_help(purchase_actions, (
+        '前往工程师途中，寻找少绕路的模组／舰载武器售卖点，可筛选已知折扣。',
+        '自动覆盖单跳和多跳；额外跳数相对直达估算。未验证实际航线，排序仅针对已取回的命中。',
+        '每项独立选择规格、折扣和新鲜度；到站距离留空不限，不核实购买数量。',
+    ), inline=True)
     win.personal_discount_note = ttk.Label(form,
         text='选择效忠 Power 后假设已解锁最高等级奖励，未读取实际等级；仅限本势力领地内适用武器，不与公共优惠相加，航母不计入。',
         wraplength=1250, style='Muted.TLabel')
@@ -249,11 +238,9 @@ def open_window(app):
             tree.insert('', 'end', iid=str(index), values=values)
         result = state['result']
         if result:
-            if app.localizer.language == 'en':
-                status.set(f"Scanned: {result['scanned']}; matches: {len(result['rows'])}. " +
-                           ' | '.join(app.localizer.tr(note) for note in result['notes']))
-            else:
-                status.set(f"已扫描：{result['scanned']}；命中：{len(result['rows'])}。" + '；'.join(result['notes']))
+            notes = app.localizer.message('shopping.separator').join(app.localizer.tr(note) for note in result['notes'])
+            status.set(app.localizer.message('shopping.summary', scanned=result['scanned'],
+                                            matches=len(result['rows']), notes=notes))
 
     def run():
         if state['busy']:

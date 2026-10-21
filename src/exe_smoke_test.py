@@ -134,6 +134,12 @@ def run(gui, report_path):
             root.update()
             time.sleep(0.01)
         assert not callback_errors, callback_errors
+        from i18n import LANGUAGES
+        for language in LANGUAGES:
+            app.set_language(language)
+            root.update_idletasks()
+        app.set_language('en')
+        assert not callback_errors, callback_errors
         assert len(rare_goods.GOODS) == 142
         assert len(rare_goods.SOURCE_SYSTEMS) == 138
         assert len(fo.BUNDLED_OPTIONS["stations/modules"]) == 153
@@ -154,7 +160,7 @@ def run(gui, report_path):
                       sortable_results=True, paired_specs=len(fo.BUNDLED_MODULE_PAIRS),
                       data_directory=data_directory(), session_file=gui.SESSION_FILE,
                       cache_file=fo.CACHE_FILE, specs_file=fo.SPECS_FILE,
-                      goods=142, sources=138, modules=153, languages=["zh", "en"],
+                       goods=142, sources=138, modules=153, languages=list(LANGUAGES),
                       windows=[w.title() for w in root.winfo_children() if isinstance(w, gui.tk.Toplevel)])
     except Exception as exc:
         report["error"] = f"{type(exc).__name__}: {exc}"

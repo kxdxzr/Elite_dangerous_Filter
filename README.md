@@ -164,6 +164,7 @@ Implementation is in `src/`, tests in `tests/`, helpers in `scripts/` and sample
 ## Documentation and sources
 
 - [Detailed search logic](docs/README_search_logic.md) · [Full outfitting](docs/full-outfitting.md) · [Engineer shopping](docs/engineer-shopping.md) · [Discount rules](docs/station-discounts.md)
+- [Language-pack structure and extension guide](docs/localization.md) (Chinese; currently Chinese/English only)
 - [v0.1.4 release notes](docs/releases/v0.1.4.md) · [Release history](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 - Developing other ED tools: [shareable public data/API reference](docs/ed-public-data-api-reference.md) · [complete API development reference](docs/ed-api-reference.md) (Chinese)
 - [Spansh](https://spansh.co.uk/): systems, stations, factions and bodies. [EDSM](https://www.edsm.net/): coordinates and same-market outfitting identity evidence.

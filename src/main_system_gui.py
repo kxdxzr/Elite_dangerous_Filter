@@ -44,15 +44,15 @@ class DetailsRow:
             except (ValueError, TypeError):
                 counts.append('?')
         v = {key: var.get() for key, var in self.variables.items()}
-        en = self.localizer and self.localizer.language == 'en'
+        from i18n import translate, message, SOURCE_LANGUAGE
+        language = self.localizer.language if self.localizer else SOURCE_LANGUAGE
         if self.kind != 'systems':
-            self.summary.set('System queries only' if en else '仅用于星系查询')
-        elif en:
-            self.summary.set(f"Planet groups: {counts[0]} ({v['body_mode']}); ring groups: {counts[1]} ({v['ring_mode']}); "
-                             f"nearest ly: {v['nearest_min'] or '—'} ~ {v['nearest_max'] or '—'}; pop > {v['population_min']}")
+            self.summary.set(translate('仅用于星系查询', language))
         else:
-            self.summary.set(f"星球组 {counts[0]} ({v['body_mode']})；星环组 {counts[1]} ({v['ring_mode']})；"
-                             f"最近距离 ly：{v['nearest_min'] or '—'} ~ {v['nearest_max'] or '—'}；人口 > {v['population_min']}")
+            self.summary.set(message('details.summary', language, bodies=counts[0], rings=counts[1],
+                                     body_mode=v['body_mode'], ring_mode=v['ring_mode'],
+                                     minimum=v['nearest_min'] or '—', maximum=v['nearest_max'] or '—',
+                                     population=v['population_min']))
 
     def set_fields(self, kind):
         self.kind = kind
@@ -94,12 +94,12 @@ class DetailsRow:
             ttk.Label(nearest, text=text).grid(row=0, column=index, sticky='w', padx=4)
             ttk.Entry(nearest, textvariable=self.variables[key], width=24).grid(row=1, column=index, sticky='ew', padx=4)
             nearest.columnconfigure(index, weight=1)
-        ttk.Label(win, text='距离上下限都留空则不启用；先查最近达标星系，再判断含边界的范围。普通距离行可同时限定搜索区域。',
-                  wraplength=1200, style='Muted.TLabel').pack(fill='x', padx=8, pady=4)
-        ttk.Label(win, text='站点、航母和派系数量通过主界面的普通条件字段设置；任务派系数量为非无政府派系估计。',
-                  wraplength=1200, style='Muted.TLabel').pack(fill='x', padx=8)
-        ttk.Label(win, text='in 多选及 between 范围用 | 分隔；布尔值用 true / false。互绕按共同直接质心和相同周期推定，复杂／缺失关系为未知。',
-                  wraplength=1200, style='Muted.TLabel').pack(fill='x', padx=8)
+        from usage_help import usage_help
+        win.usage_help = usage_help(win, (
+            '距离上下限都留空则不启用；先查最近达标星系，再判断含边界的范围。普通距离行可同时限定搜索区域。',
+            '站点、航母和派系数量通过主界面的普通条件字段设置；任务派系数量为非无政府派系估计。',
+            'in 多选及 between 范围用 | 分隔；布尔值用 true / false。互绕按共同直接质心和相同周期推定，复杂／缺失关系为未知。',
+        ))
         editors = {}
 
         def changed():

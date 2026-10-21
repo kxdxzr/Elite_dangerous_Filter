@@ -164,6 +164,7 @@ python -m PyInstaller --noconfirm --clean EliteDangerousFilter.spec
 ## 文档与数据来源
 
 - [详细检索逻辑](docs/README_检索逻辑.md) · [满配件工具](docs/full-outfitting.md) · [工程师采购](docs/engineer-shopping.md) · [折扣规则](docs/station-discounts.md)
+- [语言包结构与扩展说明](docs/localization.md)（目前仅启用中英文）
 - [v0.1.4发布说明](docs/releases/v0.1.4.md) · [历史发行版本](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 - 开发其他 ED 工具：[公开数据源速查（可独立分享）](docs/ed-public-data-api-reference.md) · [完整 API 开发参考](docs/ed-api-reference.md)
 - [Spansh](https://spansh.co.uk/)：星系、站点、派系与天体数据；[EDSM](https://www.edsm.net/)：坐标与同市场配件身份补证。

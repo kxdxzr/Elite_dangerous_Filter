@@ -10,6 +10,8 @@ import full_outfitting as tool
 import catalog_updates
 import outfitting_snapshot
 from export_metadata import write_csv_provenance
+from form_scroll import settings_form
+from usage_help import usage_help
 from localized_tk import ttk, Toplevel, messagebox
 from result_copy import copy_result
 from search_progress import SearchProgress
@@ -39,27 +41,35 @@ def open_window(app):
     for name in ('other_discounts', 'neutral_ships', 'federal_ships', 'imperial_ships', 'guardian', 'special_equipment', 'require_discount', 'ax_weapons', 'universal_limpets'):
         variables[name] = tk.BooleanVar(win, value=False)
     app.bind_tool_state('full_outfitting', win, variables)
-    controls = ttk.Frame(win, padding=8)
+    form = settings_form(win, height=360)
+    controls = ttk.Frame(form, padding=8)
     controls.pack(fill='x')
+    win.criteria_entries = {}
     for index, (name, label) in enumerate((('reference', '参考星系'), ('radius', '半径 ly'),
                                           ('want', '最多结果'), ('max_pages', '最多页数'))):
-        ttk.Label(controls, text=label).grid(row=0, column=index * 2, padx=4)
+        ttk.Label(controls, text=label).grid(row=0, column=index, sticky='w', padx=4)
         if name == 'reference':
-            entry = ttk.Combobox(controls, textvariable=variables[name], width=24)
+            entry = ttk.Combobox(controls, textvariable=variables[name], width=28)
             attach_system_suggest(entry, variables[name])
         else:
-            entry = ttk.Entry(controls, textvariable=variables[name], width=9)
-        entry.grid(row=0, column=index * 2 + 1, sticky='ew', padx=4)
-    controls.columnconfigure(1, weight=1)
-    choices = ttk.LabelFrame(win, text='附加条件', padding=6)
+            entry = ttk.Entry(controls, textvariable=variables[name], width=12)
+        entry.grid(row=1, column=index, sticky='ew', padx=4, pady=(3, 0))
+        controls.columnconfigure(index, weight=2 if name == 'reference' else 1)
+        win.criteria_entries[name] = entry
+    choices = ttk.LabelFrame(form, text='附加条件', padding=6)
     choices.pack(fill='x', padx=8, pady=4)
-    for name, label in (('neutral_ships', '全部非势力船（含联盟）'), ('federal_ships', '全部联邦船'),
-                         ('imperial_ships', '全部帝国船'), ('guardian', '同站 Guardian 科技经纪人')):
-        ttk.Checkbutton(choices, text=label, variable=variables[name]).pack(side='left', padx=5)
-    discount_box = ttk.Checkbutton(win, text='必须全部已选必需配件都有公共折扣（默认关闭）',
+    win.ship_choices = []
+    for index, (name, label) in enumerate((('neutral_ships', '全部非势力船（含联盟）'), ('federal_ships', '全部联邦船'),
+                                          ('imperial_ships', '全部帝国船'), ('guardian', '同站 Guardian 科技经纪人'))):
+        choice = ttk.Checkbutton(choices, text=label, variable=variables[name], padding=(4, 3))
+        choice.grid(row=index // 2, column=index % 2, sticky='ew', padx=5, pady=2)
+        win.ship_choices.append(choice)
+    for column in range(2):
+        choices.columnconfigure(column, weight=1)
+    discount_box = ttk.Checkbutton(form, text='必须全部已选必需配件都有公共折扣（默认关闭）',
                                    variable=variables['require_discount'])
     discount_box.pack(anchor='w', padx=12)
-    other_discount_box = ttk.Checkbutton(win, text='包含其他全配件公共折扣站（如 Jameson Memorial）',
+    other_discount_box = ttk.Checkbutton(form, text='包含其他全配件公共折扣站（如 Jameson Memorial）',
                                          variable=variables['other_discounts'])
     other_discount_box.pack(anchor='w', padx=28)
 
@@ -68,18 +78,19 @@ def open_window(app):
 
     discount_trace = variables['require_discount'].trace_add('write', discount_state)
     discount_state()
-    ttk.Checkbutton(win, text='同站AX装备规格齐全（含武器及支援设备，默认关闭）',
+    ttk.Checkbutton(form, text='同站AX装备规格齐全（含武器及支援设备，默认关闭）',
                     variable=variables['ax_weapons']).pack(anchor='w', padx=12)
-    ttk.Checkbutton(win, text='同站通用无人机控制器7A及7C齐全（默认关闭）',
+    ttk.Checkbutton(form, text='同站通用无人机控制器7A及7C齐全（默认关闭）',
                     variable=variables['universal_limpets']).pack(anchor='w', padx=12)
-    ttk.Checkbutton(win, text='额外要求 Merc Coins 特殊装备齐全（默认不要求）',
+    ttk.Checkbutton(form, text='额外要求 Merc Coins 特殊装备齐全（默认不要求）',
                     variable=variables['special_equipment']).pack(anchor='w', padx=12)
-    ttk.Label(win, text='默认不要求折扣；启用后默认LYR 15%，可包含其他公共优惠。始终排除航母及要塞航母。',
-              wraplength=1260).pack(fill='x', padx=8)
-    ttk.Label(win, text='普通／Power须全实际规格，AX装备单独可选；默认已有购买资格。Merc装备不推定代币折扣。',
-              wraplength=1260, style='Muted.TLabel').pack(fill='x', padx=8)
-    ttk.Label(win, text='舰船勾选同时检查对应船体装甲，不要求舰船折扣。库存及目录非实时，缺失数据不能证明齐全。',
-               wraplength=1260, style='Muted.TLabel').pack(fill='x', padx=8)
+    usage_notes = (
+        '默认不要求折扣；启用后默认LYR 15%，可包含其他公共优惠。始终排除航母及要塞航母。',
+        '普通／Power须全实际规格，AX装备单独可选；默认已有购买资格。Merc装备不推定代币折扣。',
+        '舰船勾选同时检查对应船体装甲，不要求舰船折扣。库存及目录非实时，缺失数据不能证明齐全。',
+        '首次及手动更新固定扫描Sol周围20,000 ly的最宽松站点名单；再按表单筛选。换星系只查询坐标并重算距离，不重扫库存。',
+        '主要适用于Bubble（人类核心居住区）；远离Bubble后，现有站点名单可能不再适用或没有结果。换参考星系只重算距离，不会自动发现当地站点。',
+    )
     cache_notice = ttk.Label(win, text='首次扫描需要建立缓存，因此会很慢；缓存完成后，后续查询会更快。',
                              wraplength=1260)
     cache_notice_font = tkfont.nametofont('TkDefaultFont').copy()
@@ -87,12 +98,11 @@ def open_window(app):
     cache_notice.configure(font=cache_notice_font)
     cache_notice.pack(fill='x', padx=8)
     win.cache_notice, win.cache_notice_font = cache_notice, cache_notice_font
-    ttk.Label(win, text='首次及手动更新固定扫描Sol周围20,000 ly的最宽松站点名单；再按表单筛选。换星系只查询坐标并重算距离，不重扫库存。',
-              wraplength=1260, style='Muted.TLabel').pack(fill='x', padx=8)
-    ttk.Label(win, text='主要适用于Bubble（人类核心居住区）；远离Bubble后，现有站点名单可能不再适用或没有结果。换参考星系只重算距离，不会自动发现当地站点。',
-              wraplength=1260, style='Muted.TLabel').pack(fill='x', padx=8)
+    ttk.Label(win, text='缓存非实时；主要适用于 Bubble。',
+              style='Muted.TLabel').pack(fill='x', padx=8)
     actions = ttk.Frame(win, padding=8)
     actions.pack(fill='x')
+    win.usage_help = usage_help(actions, usage_notes, inline=True)
     status = tk.StringVar(win, value='就绪')
     ttk.Label(win, textvariable=status, wraplength=1260).pack(fill='x', padx=8)
     bar = ttk.Progressbar(win, mode='determinate')
@@ -207,6 +217,7 @@ def open_window(app):
                 with open(path, 'w', newline='', encoding='utf-8-sig') as file:
                     writer = csv.writer(file)
                     write_csv_provenance(writer, len(headers), app.localizer.language,
+                                         metadata_rows=tool.export_context(result, app.localizer.tr),
                                          search_conditions=tool.export_search_conditions(result, app.localizer.tr))
                     writer.writerow(headers)
                     for values in records:
@@ -227,11 +238,13 @@ def open_window(app):
         scroll.pack(side='right', fill='y')
         text.pack(fill='both', expand=True)
         text.configure(yscrollcommand=scroll.set)
-        lines = [f"{result['catalog_revision']} / {result.get('catalog_size', 0)}",
+        lines = [f"{label}: {value}" for label, value in tool.export_context(result, app.localizer.tr)]
+        lines.append(tool.export_search_conditions(result, app.localizer.tr))
+        lines.extend([f"{result['catalog_revision']} / {result.get('catalog_size', 0)}",
                  app.localizer.tr('仅待身份复核（其他要求均满足）') + f": {result.get('uncertain', 0)}",
                  app.localizer.tr('库存未齐或未收录') + f": {result.get('incomplete', 0)}",
                  app.localizer.tr('其他条件未满足或无法确认') + f": {result.get('condition_failures', 0)}",
-                 *result['notes']]
+                 *result['notes']])
         lines.extend(str(issue) for issue in result.get('catalog_issues', []))
         lines.extend(str(issue) for issue in result.get('special_issues', []))
         lines.extend(str(error) for error in result.get('special_errors', []))

@@ -50,22 +50,20 @@ class SearchProgress:
         if not self.bar.winfo_exists():
             self.localizer.callbacks.discard(self.render)
             return
-        en = self.localizer.language == 'en'
         if self.finished == 'idle':
             self.bar.configure(mode='determinate', value=0)
-            self.label.set('Ready' if en else '等待查询')
+            self.label.set(self.localizer.tr('等待查询'))
             return
         if self.finished is not None:
             self.bar.stop()
             self.bar.configure(mode='determinate')
             if self.finished:
                 self.bar.configure(value=100)
-            self.label.set(('Search complete' if en else '检索完成') if self.finished else
-                           ('Stopped / incomplete; see status' if en else '已结束／未完成，详见状态'))
+            self.label.set(self.localizer.tr('检索完成' if self.finished else '已结束／未完成，详见状态'))
             return
         message, detail = self.snapshot
         done, total, stage = measure(message, detail)
-        stage = self.localizer.tr(stage) if stage else ('Current stage' if en else '当前阶段')
+        stage = self.localizer.tr(stage or '当前阶段')
         if isinstance(total, (int, float)) and total > 0:
             self.bar.stop()
             self.bar.configure(mode='determinate', maximum=100, value=min(100, 100 * done / total))
@@ -75,7 +73,7 @@ class SearchProgress:
             # Unknown work is a count/status, not a fabricated percentage or
             # a bouncing animation which hides already measured stage progress.
             self.bar.configure(mode='determinate', maximum=100, value=0)
-            self.label.set(f'{stage}: {done:,}; total unknown' if en else f'{stage}：{done:,}；总量未知')
+            self.label.set(self.localizer.message('progress.unknown', stage=stage, done=done))
 
     def finish(self, complete=False):
         self.finished = bool(complete)
