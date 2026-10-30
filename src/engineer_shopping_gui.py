@@ -128,6 +128,7 @@ def open_window(app):
 
     def add_purchase(saved=None):
         row = Row(purchase_frame, 'stations')
+        row.show_weapon_mounts = True
         row.cb_val.configure(width=40)
         row.field.set(field_label('stations', 'modules'))
         row.v_discount.set('是')
@@ -180,7 +181,7 @@ def open_window(app):
     win.usage_help = usage_help(purchase_actions, (
         '前往工程师途中，寻找少绕路的模组／舰载武器售卖点，可筛选已知折扣。',
         '自动覆盖单跳和多跳；额外跳数相对直达估算。未验证实际航线，排序仅针对已取回的命中。',
-        '每项独立选择规格、折扣和新鲜度；到站距离留空不限，不核实购买数量。',
+        '武器型号按支架分开选择，并核实同件库存；到站距离留空不限，不核实数量。',
     ), inline=True)
     win.personal_discount_note = ttk.Label(form,
         text='选择效忠 Power 后假设已解锁最高等级奖励，未读取实际等级；仅限本势力领地内适用武器，不与公共优惠相加，航母不计入。',

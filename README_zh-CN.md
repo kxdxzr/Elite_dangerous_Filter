@@ -1,12 +1,16 @@
-# Elite_dangerous_Filter
+# Elite Dangerous Filter
 
 [English](README.md) · 简体中文 · [发行版本](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
-Elite Dangerous 星系与空间站筛选桌面工具，基于 [Spansh](https://spansh.co.uk/) 等公开数据，支持即时中英文切换，以及跟随系统／浅色／深色外观。
+![Elite Dangerous Filter：组合条件筛选、装备采购与活动选址](docs/social-preview-zh.png)
 
-**适合组合复杂条件查询**：多参考点距离、模组实际规格、同站完整采购清单、折扣、天体与星环等。不一定比 Inara 更适合简单查询，定位是补充而不是替代。
+**组合你的条件，找到合适的目的地。** 基于 [Spansh](https://spansh.co.uk/) 等公开数据的 Elite Dangerous 星系与空间站筛选桌面工具。
+
+把距离、天体和站点条件放在一起查，找一站买齐装备的地方，或为殖民、海盗任务挑选下一站。内置中英文切换、跟随系统／浅色／深色外观、条件保存和 CSV 导出。定位是补充 Inara 和 Spansh，而不是替代所有伴随工具。
 
 ## 下载与快速开始
+
+> **本地准备中的修订版：v0.1.4-r1**（[修订说明草稿](docs/releases/v0.1.4-r1.md)）。尚未发布；下方仍为原版 v0.1.4 下载，其 EXE 不包含此次修订。
 
 [**下载 Windows x64 EXE v0.1.4**](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/download/v0.1.4/EliteDangerousFilter.exe) · [发布说明](docs/releases/v0.1.4.md) · [全部版本与源码包](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
@@ -24,24 +28,80 @@ EXE **未做代码签名**，Windows 可能提示“未知发布者”或 SmartS
 certutil -hashfile EliteDangerousFilter.exe SHA256
 ```
 
-> 源码分支与已发布附件不一定完全一致：当前源码及本地重打包版已补充 Windows 文件／产品版本资源，GitHub v0.1.4 原附件尚未替换。
+> 源码分支与已发布附件不一定完全一致。星系查询中的同站条件组，以及非航母／轨道站／地表站分类数量，**目前仅在源码中，尚未包含在上方 v0.1.4 EXE 中**。原发行附件未替换；当前源码也已补充 Windows 文件／产品版本资源。
 
-## 工具概览
+## 可以用它做什么？
 
-| 工具 | 用途与关键规则 |
+### 组合条件，不再逐项人工核对
+
+- **同时考虑多个出发点。** 把多参考点距离、交集与范围外条件，和站点设施、经济、派系、数据新鲜度一起筛选。
+- **按真正需要的装备规格找站。** 模组建议保留已确认的等级／级别组合，不拼接不存在的规格。
+- **查找符合偏好的星系。** 组合星球与独立星环组、站点／派系数量，以及核实后的最近有人星系距离。
+
+例如：找一座出售指定规格模组、同时处于两个参考星系范围内、拥有大型停机坪且到站距离较短的空间站。不同行之间为 AND，同一行多选为 OR。
+
+<details>
+<summary>查看主界面与星系详细条件编辑器</summary>
+
+本节及下文截图均于 2026-10-20 拍摄自 v0.1.4 浅色界面。黄色提示标明**离线演示数据**，不代表实际库存、任务、可认领星系或已验证航线，也不包含后续仅源码新增的条件。
+
+![主界面](docs/images/main-gui.png)
+
+![主窗口星系详细条件编辑器](docs/images/main-system-details.png)
+
+</details>
+
+### 少跑几个站，把装备买齐
+
+- **查找满配件空间站。** 对照已知目录逐项核验同站库存，可选择折扣、AX、通用控制器、Merc、舰船／装甲和 Guardian 经纪人要求；排除普通及要塞航母。
+- **前往工程师途中采购。** 每项装备单独指定规格，寻找前往 25 位舰船工程师途中能满足**全部采购项**的一家站点，对比停机坪、到站距离、新鲜度、折扣与额外估算跳数。
+
+与主界面多选 OR 不同，采购清单要求同一家站买齐全部所需物品。未知数据不会当作有货；Merc 身份歧义可能导致严格查询无法命中。
+
+<details>
+<summary>查看满配件核验与工程师采购（离线演示）</summary>
+
+![查找满配件空间站](docs/images/full-outfitting-finder.png)
+
+![工程师途中采购](docs/images/engineer-shopping.png)
+
+![工程师采购距离和估算跳数明细](docs/images/engineer-shopping-route-details.png)
+
+</details>
+
+### 为下一次活动选个好去处
+
+- **殖民候选：**按区域、附近有人星系、价值、天体与星环，筛选零人口、明确免许可、无站点的星系。候选不等于一定可认领。
+- **海盗任务选址（测试中）：**把 EDTools 任务配对与地点记录，和 Spansh 派系、控制 Power、来源站通达性及目标星环结合。最少任务派系数设为 0 时，还可检索任务配对清单以外的 RES 星系；不读取实时任务板。
+
+| 还有这些工具 | 帮你查什么 |
 | --- | --- |
-| 主界面通用筛选 | 星系／站点条件自由组合：不同行 AND，同一行多选 OR；支持多参考点、距离交集／范围外、同件模组规格、新鲜度、站点／派系数量及天体／星环组 |
-| 查找满配件空间站 | 按已知目录逐项核验同站普通／Power 配件规格，可选折扣、AX、通用控制器、Merc、舰船／装甲及 Guardian 经纪人；排除航母和要塞航母 |
-| 工程师途中采购 | 向 25 位舰船工程师出发途中，寻找一座满足全部采购项的站点；每项独立规格、折扣与新鲜度，支持停机坪、到站距离和额外估算跳数 |
-| 稀有商品目标查找 | 142 个来源条目、138 个星系；按关联 Power 筛选，按星系合并目标，可选实验性中子星几何顺路筛选 |
-| 海盗任务查找（测试中） | EDTools 任务配对／地点记录结合 Spansh 派系、控制 Power、来源站和目标星环条件；最少任务派系数为 0 时扩展 RES 星系检索 |
-| 航母车位查找 | 最多 50 ly，按已收录航母数量筛选；仅设最多航母数，数量不是实时空位 |
-| 两系中点 | 查找两星系几何中点附近星系，展示距中点及两端距离 |
-| 殖民候选星系查找 | 零人口、明确免许可、无站点候选；支持区域、最近有人距离、价值、星球与独立星环条件，不保证实际可认领 |
+| 稀有商品目标查找 | 142 个来源条目、138 个星系；按关联 Power 筛选目标并按星系分组，可选实验性中子星几何顺路筛选 |
+| 航母停靠参考 | 最多 50 ly 内、满足最多已收录航母数的星系；**不是实时空余车位** |
+| 两系中点 | 两个参考星系的几何中点附近星系，以及到两端的距离 |
 
-模组建议保留已确认的等级／级别组合，不拼接不存在的规格。主界面的 OR 与采购清单“全部采购项都要满足”不同；未知值不会当作已确认满足条件。
+<details>
+<summary>查看殖民、海盗任务及其他工具（离线演示）</summary>
 
-### 查找满配件空间站
+![殖民候选星系查找器](docs/images/colonisation-finder.png)
+
+![殖民候选结果明细](docs/images/colonisation-finder-details.png)
+
+![海盗任务结果概览](docs/images/pirate-massacre-finder-zh.png)
+
+![海盗任务距离明细](docs/images/pirate-massacre-finder-details-zh.png)
+
+![稀有商品目标查找器](docs/images/rare-goods-target-finder.png)
+
+![航母车位查找器](docs/images/carrier-parking-finder.png)
+
+![两系中点工具](docs/images/system-midpoint-finder.png)
+
+</details>
+
+## 如何理解查询结果
+
+### 满配件范围与首次扫描
 
 - **首次扫描会很慢，可能数分钟到十多分钟。** 首次及手动更新固定采集 Sol 周围 **20,000 ly** 最宽松站点名单，主要适用于 Bubble。
 - 后续改条件复用本地库存；换参考星系仅补查缺少的坐标并重算距离。扩大半径不会自动发现名单外站点，远离 Bubble 可能无有效结果。
@@ -70,72 +130,6 @@ certutil -hashfile EliteDangerousFilter.exe SHA256
 - CSV 开头为五行 `# `来源信息：作者、项目名、运行版本、含时区导出时间、项目链接。部分导出（如满配件工具）还附检索条件，随后为空行、表头和结果；**导入时不要固定跳过六行，应定位元信息后的空行／结果表头**。
 - CSV 保留已完成搜索的条件，而不是尚未重新查询的界面草稿；主界面按条件拆列，不导出整份原始 JSON。来源信息标识软件，不代表拥有第三方游戏数据版权。
 
-## 截图
-
-2026-10-20 拍摄于 v0.1.4 浅色界面，覆盖主界面及七个工具。全部为带黄色提示的**离线演示数据**，不是实际库存、任务、可认领星系或已验证路线。点击图片可查看原尺寸。
-
-### 主界面
-
-![主界面](docs/images/main-gui.png)
-
-<details>
-<summary>天体／独立星环组与最近有人条件</summary>
-
-![主窗口星系详细条件编辑器](docs/images/main-system-details.png)
-
-</details>
-
-### 查找满配件空间站
-
-![查找满配件空间站](docs/images/full-outfitting-finder.png)
-
-### 工程师途中采购
-
-![工程师途中采购](docs/images/engineer-shopping.png)
-
-<details>
-<summary>距离、估算跳数及绕行明细</summary>
-
-![工程师采购距离和估算跳数明细](docs/images/engineer-shopping-route-details.png)
-
-</details>
-
-### 稀有商品目标查找
-
-![稀有商品目标查找器](docs/images/rare-goods-target-finder.png)
-
-### 海盗任务查找（测试中）
-
-![海盗任务结果概览](docs/images/pirate-massacre-finder-zh.png)
-
-<details>
-<summary>来源站点及目标星环距离明细</summary>
-
-![海盗任务距离明细](docs/images/pirate-massacre-finder-details-zh.png)
-
-</details>
-
-### 航母车位查找
-
-最多航母数量与记录统计，不代表实时空位。
-
-![航母车位查找器](docs/images/carrier-parking-finder.png)
-
-### 两系中点
-
-![两系中点工具](docs/images/system-midpoint-finder.png)
-
-### 殖民候选星系查找
-
-![殖民候选星系查找器](docs/images/colonisation-finder.png)
-
-<details>
-<summary>价值及天体匹配明细</summary>
-
-![殖民候选结果明细](docs/images/colonisation-finder-details.png)
-
-</details>
-
 ## 源码运行与构建
 
 源码需要 **Python 3.10+ 和 tkinter**，无第三方运行依赖。`python -m tkinter` 可检查 Tk；Debian／Ubuntu 可能需要安装 `python3-tk`。
@@ -160,6 +154,8 @@ python -m PyInstaller --noconfirm --clean EliteDangerousFilter.spec
 实际 EXE 支持 `--smoke-test <报告.json>`、`--session-test write <报告.json>`、`--session-test read <另一报告.json>`；会话写入／读取须分进程运行，设置独立 `ELITE_FILTER_DATA_DIR`，提前创建报告目录，避免覆盖个人会话。Tk 测试需要图形环境；CI 覆盖 Windows／Ubuntu、Python 3.10／3.13。
 
 实现位于 `src/`，测试在 `tests/`，脚本在 `scripts/`，条件示例在 `examples/`。CLI 用法见 `python spansh_filter.py --help` 及[筛选器说明](docs/README_筛选器说明.txt)。截图重拍使用 `scripts/capture_screenshots.py` 和可选开发依赖 Pillow 12；脚本隔离会话并禁用网络，[manifest](docs/images/screenshots.json)记录尺寸与哈希。
+
+功能封面可用 `python scripts/render_feature_cover.py` 重新生成（需要 Pillow 和支持中文的字体），输出英文 `docs/social-preview.png` 和中文 `docs/social-preview-zh.png`，不联网或读取程序数据。README 直接引用这些图片；GitHub 仓库的社交预览设置须另外上传所选图片，不会随文件修改自动更新。
 
 ## 文档与数据来源
 

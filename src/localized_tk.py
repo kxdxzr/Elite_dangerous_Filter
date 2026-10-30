@@ -77,6 +77,9 @@ class TextMixin:
         if isinstance(cnf, dict):
             kw = dict(cnf, **kw)
             cnf = None
+        labels_changed = 'value_labels' in kw
+        if labels_changed:
+            self._value_labels = kw.pop('value_labels')
         if 'text' in kw:
             self._raw_text = kw['text']
             if getattr(self, '_manager', None):
@@ -86,6 +89,8 @@ class TextMixin:
             if getattr(self, '_manager', None):
                 kw['values'] = [self._manager.tr(self._value_labels.get(v, v)) for v in self._raw_values]
         result = super().configure(cnf, **kw)
+        if labels_changed and getattr(self, '_manager', None):
+            self._render()
         return result
 
     config = configure

@@ -6,6 +6,7 @@ from localized_tk import ttk, Toplevel, manager
 from colonisation_gui import GroupEditor
 import colonisation_tool as bodies
 import system_filters
+import station_groups
 
 
 class DetailsRow:
@@ -16,17 +17,20 @@ class DetailsRow:
         self.frame = ttk.Frame(master, padding=4, relief='groove')
         self.frame.pack(fill='x', pady=2)
         self.variables = {key: tk.StringVar(self.frame, value=value) for key, value in {
-            'body_groups': '[]', 'ring_groups': '[]', 'body_mode': 'AND', 'ring_mode': 'AND',
+            'body_groups': '[]', 'ring_groups': '[]', 'station_groups': '[]',
+            'body_mode': 'AND', 'ring_mode': 'AND', 'station_mode': 'AND',
             'population_min': '1', 'nearest_min': '', 'nearest_max': ''}.items()}
         for key, value in (saved or {}).get('settings', {}).items():
             if key in self.variables and isinstance(value, str):
                 self.variables[key].set(value)
-        ttk.Label(self.frame, text='天体／最近有人条件').pack(side='left', padx=3)
+        ttk.Label(self.frame, text='天体／站点／最近有人条件', wraplength=220).pack(side='left', padx=3)
         self.button = ttk.Button(self.frame, text='编辑详细条件…', command=self.open_editor)
         self.button.pack(side='left', padx=4)
         self.summary = tk.StringVar(self.frame)
-        ttk.Label(self.frame, textvariable=self.summary).pack(side='left', padx=4)
         ttk.Button(self.frame, text='删除', command=self.destroy).pack(side='right')
+        summary_label = ttk.Label(self.frame, textvariable=self.summary, wraplength=650, justify='left')
+        summary_label.pack(side='left', fill='x', expand=True, padx=4)
+        summary_label.bind('<Configure>', lambda e: summary_label.configure(wraplength=max(120, e.width)))
         self.localizer = manager(self.frame)
         if self.localizer:
             self.localizer.register(self.refresh_options)
@@ -38,7 +42,7 @@ class DetailsRow:
         if not self.frame.winfo_exists():
             return
         counts = []
-        for key in ('body_groups', 'ring_groups'):
+        for key in ('body_groups', 'ring_groups', 'station_groups'):
             try:
                 counts.append(len(json.loads(self.variables[key].get())))
             except (ValueError, TypeError):
@@ -50,7 +54,8 @@ class DetailsRow:
             self.summary.set(translate('仅用于星系查询', language))
         else:
             self.summary.set(message('details.summary', language, bodies=counts[0], rings=counts[1],
-                                     body_mode=v['body_mode'], ring_mode=v['ring_mode'],
+                                      body_mode=v['body_mode'], ring_mode=v['ring_mode'],
+                                      stations=counts[2], station_mode=v['station_mode'],
                                      minimum=v['nearest_min'] or '—', maximum=v['nearest_max'] or '—',
                                      population=v['population_min']))
 
@@ -71,9 +76,9 @@ class DetailsRow:
 
     def to_cond(self):
         if self.kind != 'systems':
-            raise ValueError('天体／最近有人条件仅用于星系查询')
+            raise ValueError('天体／站点／最近有人条件仅用于星系查询')
         values = {key: var.get() for key, var in self.variables.items()}
-        for key in ('body_groups', 'ring_groups'):
+        for key in ('body_groups', 'ring_groups', 'station_groups'):
             values[key] = json.loads(values[key])
         return system_filters.validate(dict(type=self.type, **values))
 
@@ -96,31 +101,54 @@ class DetailsRow:
             nearest.columnconfigure(index, weight=1)
         from usage_help import usage_help
         win.usage_help = usage_help(win, (
+            '天体类别选 Star 可筛恒星；恒星类型和是否主星须由同一颗恒星满足。旧星球条件仍只匹配行星，主星标记缺失为未知。',
             '距离上下限都留空则不启用；先查最近达标星系，再判断含边界的范围。普通距离行可同时限定搜索区域。',
             '站点、航母和派系数量通过主界面的普通条件字段设置；任务派系数量为非无政府派系估计。',
             'in 多选及 between 范围用 | 分隔；布尔值用 true / false。互绕按共同直接质心和相同周期推定，复杂／缺失关系为未知。',
+            '站点组内条件须由同一家站点同时满足；不同组可由不同站点满足。多个服务请逐条添加；in 表示任一。',
+            '站点总数保留并包含航母；非航母数量含轨道站和地表站。分类数据缺失时数量未知，不视为零。',
         ))
+        tabs = ttk.Notebook(win)
+        tabs.pack(fill='both', expand=True, padx=8, pady=4)
         editors = {}
+        tab_titles = []
 
         def changed():
             for key, editor in editors.items():
                 self.variables[key].set(json.dumps(editor.snapshot(), ensure_ascii=False))
 
         for key, title, fields, mode in (
-                ('body_groups', '星球条件', bodies.BODY_FIELDS, 'body_mode'),
-                ('ring_groups', '独立星环条件', bodies.RING_FIELDS, 'ring_mode')):
-            section = ttk.LabelFrame(win, text=title, padding=5)
-            section.pack(fill='both', expand=True, padx=8, pady=4)
+                ('body_groups', '天体条件', bodies.BODY_FIELDS, 'body_mode'),
+                ('ring_groups', '独立星环条件', bodies.RING_FIELDS, 'ring_mode'),
+                ('station_groups', '站点条件组', station_groups.FIELDS, 'station_mode')):
+            section = ttk.Frame(tabs, padding=5)
+            tabs.add(section, text=title)
+            tab_titles.append((section, title))
             try:
                 saved = json.loads(self.variables[key].get())
                 saved = saved if isinstance(saved, list) else []
             except ValueError:
                 saved = []
-            editors[key] = GroupEditor(section, fields, self.variables[mode], saved, changed)
+            options = (dict(values=station_groups.VALUES, operators=station_groups.OPERATORS,
+                            hint='AND：全部存在；OR：任一存在。组内条件由同一家站点同时满足。')
+                       if key == 'station_groups' else {})
+            editors[key] = GroupEditor(section, fields, self.variables[mode], saved, changed, **options)
+
+        def localize_tabs():
+            from i18n import translate, SOURCE_LANGUAGE
+            language = self.localizer.language if self.localizer else SOURCE_LANGUAGE
+            for tab, title in tab_titles:
+                tabs.tab(tab, text=translate(title, language))
+
+        if self.localizer:
+            self.localizer.register(localize_tabs)
+        localize_tabs()
         ttk.Button(win, text='关闭', command=win.destroy).pack(pady=5)
 
         def closed(event):
             if event.widget is win:
+                if self.localizer:
+                    self.localizer.callbacks.discard(localize_tabs)
                 for editor in editors.values():
                     editor.dispose()
                 editors.clear()

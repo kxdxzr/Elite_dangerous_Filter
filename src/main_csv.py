@@ -56,7 +56,11 @@ def export_table(rows, kind, conditions, language, tr):
     details_index = 0
     sale_index = 0
     for condition in conditions:
-        if condition.get('type') == 'distance':
+        if condition.get('type') == 'rings':
+            from ring_conditions import evidence_text, key
+            add(('rings', key(condition)), title_text('匹配星环证据'),
+                lambda r, c=condition: evidence_text(r, c))
+        elif condition.get('type') == 'distance':
             ref = condition['ref_system']
             add(('distance', ref), message('csv.distance', language, reference=ref),
                 lambda r, ref=ref: format_ly(r['_distances'][ref])
@@ -70,7 +74,13 @@ def export_table(rows, kind, conditions, language, tr):
                     add((index, evidence), title,
                         lambda r, index=index, evidence=evidence: '; '.join(
                             str(g.get(evidence, '')) for g in r.get('_system_details', {}).get('groups', [])
-                            if g.get('condition') == index))
+                             if g.get('condition') == index))
+            if condition.get('station_groups'):
+                add((index, 'stations'), message('csv.stations', language, index=index),
+                    lambda r, index=index: '; '.join(
+                        f"{group['group']}: {', '.join(group['names'])}"
+                        for item in r.get('_system_details', {}).get('stations', [])
+                        if item.get('condition') == index for group in item['groups']))
             if condition.get('nearest_min') is not None or condition.get('nearest_max') is not None:
                 for key, label in (('name', '最近有人星系'),
                                    ('population', '邻近星系人口'),
@@ -92,6 +102,8 @@ def export_table(rows, kind, conditions, language, tr):
                 attributes = [('name', label)]
                 if field == 'modules':
                     attributes += [('class', title_text('等级')), ('rating', title_text('级别'))]
+                    if condition.get('weapon_mode'):
+                        attributes += [('weapon_mode', title_text('武器支架'))]
                 if condition.get('discounted') is True:
                     attributes += [('percent', title_text('优惠幅度 %')), ('source', title_text('折扣来源'))]
                 for attribute, title in attributes:
@@ -100,7 +112,10 @@ def export_table(rows, kind, conditions, language, tr):
                         for item, info in eng.matching_sale_items(kind, row, condition):
                             value = (info.get(attribute) if attribute in ('percent', 'source') else
                                      item.get(attribute) if isinstance(item, dict) else
-                                     item if attribute == 'name' else None)
+                                      item if attribute == 'name' else None)
+                            if attribute == 'weapon_mode' and isinstance(item, dict):
+                                from weapon_mounts import item_mount
+                                value = item_mount(item)
                             values.append(text(value))
                         return '; '.join(dict.fromkeys(values)) or None
                     add(('sale', index, attribute), message('csv.indexed', language, title=title, index=index), sale_value)

@@ -88,6 +88,15 @@ def run(gui, report_path):
         shopping.purchase_row.v_spec.set('0A')
         shopping.add_purchase(dict(value='Plasma Accelerator', module_spec='2C'))
         assert [c['values'] for c in shopping.criteria()[0].conditions[:2]] == [['Shield Booster'], ['Plasma Accelerator']]
+        mount_row = shopping.add_purchase(dict(value='Beam Laser', module_spec='2D|Gimballed', discount='不限'))
+        assert '2D（固定）' in mount_row.cb_spec['values']
+        assert '2D（万向）' in mount_row.cb_spec['values']
+        assert mount_row.to_cond()['weapon_mode'] == 'Gimballed'
+        import filter_engine as eng
+        sample = dict(name='Beam Laser', **{'class': 2, 'rating': 'D'})
+        mount_condition = eng.normalize_conditions('stations', [mount_row.to_cond()])[0]
+        assert eng.match_field('stations', {'modules': [dict(sample, weapon_mode='Gimbal')]}, mount_condition)
+        assert not eng.match_field('stations', {'modules': [dict(sample, weapon_mode='Fixed')]}, mount_condition)
         assert 'ignore_planetary' in shopping.session_variables
         assert len(shopping.destination_box['values']) == 25
         app.results = [dict(name='Shop 10', system_name='Sol', distance_to_arrival=10),
@@ -112,6 +121,7 @@ def run(gui, report_path):
         assert colony.criteria().body_groups[0][0]['field'] == '_is_binary'
         app.set_language("en")
         assert shopping.title() == 'Engineer trip shopping'
+        assert mount_row.cb_spec._display.get() == '2D (Gimballed)'
         assert outfitting.title() == 'Find fully outfitted stations'
         assert colony.title() == "Colonisation candidate finder"
         assert button(colony, '查询').cget('text') == 'Search'

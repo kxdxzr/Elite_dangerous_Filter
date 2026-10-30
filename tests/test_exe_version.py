@@ -53,6 +53,14 @@ class ExeVersionTests(unittest.TestCase):
         self.assertEqual(windows_version_fields('1.2.3+build.4')['flags'], 0)
 
     def test_invalid_or_out_of_range_versions_fail_before_building(self):
-        for version in ('v1.2.3', '1.2', '1.2.3.4', '65536.0.0', '1.2.3-', ''):
+        for version in ('v1.2.3', '1.2', '1.2.3.4', '65536.0.0', '1.2.3-r65536', '1.2.3-', ''):
             with self.subTest(version=version), self.assertRaises(ValueError):
                 windows_version_fields(version)
+
+    def test_revision_is_distinct_from_original_and_not_a_beta(self):
+        fields = windows_version_fields('0.1.4-r1')
+        self.assertEqual(fields['filevers'], (0, 1, 4, 1))
+        self.assertEqual(fields['prodvers'], (0, 1, 4, 1))
+        self.assertEqual(fields['flags'], 0)
+        self.assertEqual(fields['strings']['ProductVersion'], '0.1.4-r1')
+        self.assertEqual(windows_version_fields('0.1.4')['filevers'], (0, 1, 4, 0))

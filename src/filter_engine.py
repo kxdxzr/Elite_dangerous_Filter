@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import urllib.parse
 import urllib.request
 import gzip
+import request_control
 
 import field_options as fo
 from system_filter_fields import COUNT_FIELDS
@@ -35,11 +36,13 @@ def _http_json(url, payload=None, timeout=60, compressed=False):
                                               "User-Agent": "elite-filter/1.0"})
     if compressed:
         req.add_header('Accept-Encoding', 'gzip')
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        body = r.read()
-        if compressed and r.headers.get('Content-Encoding', '').casefold() == 'gzip':
-            body = gzip.decompress(body)
-        return json.loads(body.decode("utf-8"))
+    def operation():
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            body = r.read()
+            if compressed and r.headers.get('Content-Encoding', '').casefold() == 'gzip':
+                body = gzip.decompress(body)
+            return json.loads(body.decode("utf-8"))
+    return request_control.request(url, operation)
 
 
 def _lookup_exact(name):
@@ -47,6 +50,8 @@ def _lookup_exact(name):
     q = urllib.parse.urlencode({"systemName": name.strip(), "showCoordinates": 1})
     try:
         d = _http_json(f"{EDSM_SYSTEM_URL}?{q}", timeout=30)
+    except InterruptedError:
+        raise
     except Exception:
         d = {}
     c = d.get("coords") if isinstance(d, dict) else None
@@ -61,8 +66,9 @@ def _lookup_exact(name):
                 and all(k in r0 for k in ("x", "y", "z"))):
             return (r0.get("name") or name.strip(),
                     (float(r0["x"]), float(r0["y"]), float(r0["z"])))
-    except Exception:
-        pass
+    except Exception as error:
+        if isinstance(error, InterruptedError) or getattr(error, 'elite_retry_exhausted', False):
+            raise
     return None
 
 
@@ -310,9 +316,17 @@ def normalize_conditions(kind, conditions):
     result = copy.deepcopy(conditions)
     for i, c in enumerate(result, 1):
         label = f"第{i}条条件"
+        import ring_conditions
+        migrated = ring_conditions.legacy(c) if kind == 'stations' else c
+        if migrated is not c:
+            c.clear()
+            c.update(migrated)
+        if c.get('type') == 'rings':
+            c.update(ring_conditions.validate(c))
+            continue
         if c.get('type') == 'system_details':
             if kind != 'systems':
-                raise ValueError('天体／最近有人条件仅用于星系查询')
+                raise ValueError('天体／站点／最近有人条件仅用于星系查询')
             import system_filters
             c.update(system_filters.validate(c))
             continue
@@ -398,6 +412,10 @@ def normalize_conditions(kind, conditions):
                     raise ValueError('个人优惠仅支持采购模组／舰载武器')
                 from powerplay_tool import normalize_power
                 c['personal_power'] = normalize_power(c['personal_power'])
+            if c.get('weapon_mode') is not None:
+                if (kind != 'stations' or c.get('field') != 'modules' or op not in ('in', '=', 'contains')
+                        or c['weapon_mode'] not in ('Fixed', 'Gimballed', 'Turreted')):
+                    raise ValueError('请选择有效的武器支架')
             keys = ("min", "max") if numeric and op in ("between", "outside") else ()
         for key in keys:
             raw = c.get(key)
@@ -457,7 +475,18 @@ def plan_server_filters(kind, conditions):
     for c in conditions:
         if c.get("type") == "distance":
             continue
-        if c.get('type') == 'system_details' or c.get('field') in COUNT_FIELDS:
+        if c.get('type') == 'rings' and kind == 'stations' and c.get('mode') != 'any':
+            # Presence is a safe coarse prefilter for type selection too.
+            value = c['mode'] != 'absent'
+            if 'body_has_rings' in seen_bools and seen_bools['body_has_rings'] != value:
+                return {}, 0, [], '星环条件互相矛盾'
+            seen_bools['body_has_rings'] = value
+            if value:
+                bools['body_has_rings'] = True
+            # Boolean false is not supported reliably by this backend.
+            local_only += 1
+            continue
+        if c.get('type') in ('system_details', 'rings') or c.get('field') in COUNT_FIELDS:
             local_only += 1
             continue
         f, op = c["field"], c["op"]
@@ -722,6 +751,10 @@ def _match_module_item(raw, cond, op):
             continue
         if ratings and str(it.get("rating", "")).upper() not in ratings:
             continue
+        if cond.get('weapon_mode'):
+            from weapon_mounts import item_mount
+            if item_mount(it) != cond['weapon_mode']:
+                continue
         return True
     return False
 
@@ -772,7 +805,7 @@ def match_field(kind, row, cond):
             # 集成新鲜度: 先卡数据年龄, 不新鲜直接淘汰
             if not fresh_ok(row, FRESH_TS_KEY[f], cond["fresh_days"]):
                 return False
-        if (f == "modules" and (cond.get("class") or cond.get("rating"))
+        if (f == "modules" and (cond.get("class") or cond.get("rating") or cond.get('weapon_mode'))
                 and op in ("in", "=", "contains")):
             return _match_module_item(raw, cond, op)
         names = [n.lower() for n in _names(raw, f)]
@@ -866,7 +899,11 @@ def match_distance(kind, row, cond, coord_cache):
 
 def match_all(kind, row, conditions, coord_cache):
     for c in conditions:
-        if c.get("type") == "distance":
+        if c.get('type') == 'rings':
+            import ring_conditions
+            if ring_conditions.outcome(row, c) is not True:
+                return False
+        elif c.get("type") == "distance":
             if not match_distance(kind, row, c, coord_cache):
                 return False
         elif c.get('type') == 'system_details':
@@ -884,11 +921,19 @@ def match_candidate(kind, row, conditions, coord_cache, filters, missing):
     无法复核的本地条件不冒充通过，并汇总缺失字段供用户诊断。
     """
     for c in sorted(conditions, key=lambda c: 2 if c.get('type') == 'system_details' else 1 if c.get('field') in COUNT_FIELDS else 0):
+        if c.get('type') == 'rings':
+            import ring_conditions
+            hit = ring_conditions.outcome(row, c)
+            if hit is None:
+                missing.add('星环条件')
+            if hit is not True:
+                return False
+            continue
         if c.get('type') == 'system_details':
             import system_filters
             hit = system_filters.outcome(row, c)
             if hit is None:
-                missing.add('天体／最近有人条件')
+                missing.add('天体／站点／最近有人条件')
             if hit is not True:
                 return False
             continue
@@ -1082,7 +1127,38 @@ def tighten_distance_payload(kind, payload, conditions, coord_cache, notes):
 
 
 def search(kind, conditions, want=200, max_pages=25, progress=None,
-            corrections=None, stop=None, notes=None, page_size=500, row_filter=None, http=None):
+           corrections=None, stop=None, notes=None, page_size=500, row_filter=None, http=None,
+           resume=None):
+    """Optionally return verified partial results and a resumable network pause."""
+    import search_recovery
+    if resume is not None:
+        search_recovery.bind(resume, json.dumps([kind, conditions, want, max_pages, page_size], sort_keys=True))
+    try:
+        with request_control.context(stop, lambda text: _report(progress, text, stage='网络冷却', done=0, work_total=None)):
+            result = _search(kind, conditions, want, max_pages, progress, corrections,
+                             stop, notes, page_size, row_filter, http, resume)
+    except Exception as error:
+        if isinstance(error, InterruptedError) and resume is not None and stop is not None and stop.is_set():
+            result = (list(resume.get('rows', [])), resume.get('total', 0), resume.get('display_scanned', 0))
+            if notes is not None:
+                notes.append('已手动停止，返回部分结果')
+        elif resume is None or not search_recovery.transient(error):
+            raise
+        else:
+            search_recovery.pause(resume, error)
+            if notes is not None:
+                notes.append('网络暂时异常，已保留核实结果；可继续检索')
+            return list(resume.get('rows', [])), resume.get('total', 0), resume.get('display_scanned', 0)
+    if resume is not None and stop is not None and stop.is_set() and resume.get('rows'):
+        result = (list(resume['rows']), resume.get('total', result[1]),
+                  max(result[2], resume.get('display_scanned', 0)))
+    search_recovery.finished(resume, stopped=bool(stop is not None and stop.is_set() and len(result[0]) < want))
+    return result
+
+
+def _search(kind, conditions, want=200, max_pages=25, progress=None,
+            corrections=None, stop=None, notes=None, page_size=500, row_filter=None, http=None,
+            resume=None):
     """一次规划 -> 流式分页 -> 去重 -> 精确复核。
     返回 (rows, total_server, scanned)，终止原因记录在 notes。
     count 是后端封顶的候选数，不能据此判断已遍历全库。
@@ -1102,8 +1178,9 @@ def search(kind, conditions, want=200, max_pages=25, progress=None,
         notes.append(str(exc))
         return [], 0, 0
     filters, pushed, pnotes, _ = plan_server_filters(kind, conditions)
-    detailed = kind == 'systems' and any(c.get('type') == 'system_details' or c.get('field') in COUNT_FIELDS for c in conditions)
-    cheap = [c for c in conditions if c.get('type') != 'system_details' and c.get('field') not in COUNT_FIELDS]
+    ring_details = any(c.get('type') == 'rings' for c in conditions)
+    detailed = ring_details or kind == 'systems' and any(c.get('type') == 'system_details' or c.get('field') in COUNT_FIELDS for c in conditions)
+    cheap = [c for c in conditions if c.get('type') not in ('system_details', 'rings') and c.get('field') not in COUNT_FIELDS]
     notes.extend(pnotes)
     per = page_size
     coord_cache = {}
@@ -1136,8 +1213,20 @@ def search(kind, conditions, want=200, max_pages=25, progress=None,
         return [], 0, 0
     notes.append(f"{pushed} 个条件服务器直查"
                  + (" + 距离范围" if "distance" in template["filters"] else ""))
-    out, total, scanned, page = [], 0, 0, 0
-    seen = set()
+    out = resume.setdefault('rows', []) if resume is not None else []
+    total, scanned, page = (resume.get('total', 0), resume.get('scanned', 0), resume.get('page', 0)) if resume is not None else (0, 0, 0)
+    seen = set(resume.get('seen', ())) if resume is not None else set()
+    emitted = {(r.get('id') if kind == 'stations' else r.get('id64'), r.get('system_name'), r.get('name')) for r in out}
+    caller_progress = progress
+    def progress(message, detail=None):
+        info = dict(detail or {})
+        phase = info.get('phase', 'fetch')
+        steps = ['候选分页', '详细核验', '结果汇总'] if detailed else ['候选分页', '结果汇总']
+        step = len(steps) if phase == 'page' else 2 if phase == 'details' else 1
+        info['overall'] = dict(scanned=max(0, scanned - (phase == 'details')), total=total,
+                               hits=len(out), want=want, page=page + 1, pages=max_pages,
+                               step=step, steps=len(steps), plan=steps, per=per)
+        _report(caller_progress, message, **info)
     missing = set()
     reason = "达到翻页上限，检索未完成；当前命中数不是全库结果数"
     while len(out) < want and page < max_pages:
@@ -1145,14 +1234,27 @@ def search(kind, conditions, want=200, max_pages=25, progress=None,
             reason = "已手动停止，返回部分结果"
             break
         p = dict(template, page=page)
+        if resume is not None:
+            resume.update(page=page, scanned=scanned, seen=set(seen), total=total, display_scanned=scanned)
         _report(progress, f"正在请求第{page + 1}页 (每页{per}条)，已命中 {len(out)}...",
                 phase="fetch", scanned=scanned, hits=len(out), total=total,
                 page=page, pages=max_pages, per=per, want=want)
-        d = (http or _http_json)(f"{SPansh_BASE}/{kind}/search", p)
+        d = resume.get('batch') if resume is not None else None
+        if d is None:
+            d = (http or _http_json)(f"{SPansh_BASE}/{kind}/search", p)
+            if resume is not None:
+                resume['batch'] = copy.deepcopy(d)
+        else:
+            d = copy.deepcopy(d)
+        if cancelled():
+            reason = '已手动停止，返回部分结果'
+            break
         if not isinstance(d, dict) or not isinstance(d.get("results"), list):
             raise ValueError(f"服务器响应无效: {str(d)[:300]}")
         if page == 0:
             total = d.get("count", 0)
+        if resume is not None:
+            resume['total'] = total
         rs = d.get("results", [])
         if not rs:
             reason = "候选分页已取完"
@@ -1162,7 +1264,7 @@ def search(kind, conditions, want=200, max_pages=25, progress=None,
             rs = [dict(r) for r in rs]
             survivors, pending = [], set()
             for r in rs:
-                ident = (kind, r.get('id64'))
+                ident = (kind, r.get('id') if kind == 'stations' else r.get('id64'))
                 if ident[1] is None:
                     ident = (kind, r.get('system_name'), r.get('name'), result_coords(kind, r))
                 if ident in seen or ident in pending:
@@ -1170,14 +1272,11 @@ def search(kind, conditions, want=200, max_pages=25, progress=None,
                 pending.add(ident)
                 if not is_excluded_system(kind, r) and match_candidate(kind, r, cheap, coord_cache, template['filters'], missing):
                     survivors.append(r)
-            try:
-                system_filters.prepare(survivors, conditions, stop=stop, max_pages=max_pages,
-                                       progress=lambda: _report(progress, '正在复核星系详细条件…',
-                                                                phase='fetch', scanned=scanned, hits=len(out),
-                                                                total=total, page=page, pages=max_pages, want=want))
-            except InterruptedError:
-                reason = '已手动停止，返回部分结果'
-                break
+            block_size = min(32, max(8, want - len(out)))
+            blocks = [survivors[i:i + block_size] for i in range(0, len(survivors), block_size)]
+            block_for = {id(row): index for index, block in enumerate(blocks) for row in block}
+            prepared = set()
+        interrupted = False
         new_count = 0
         for r in rs:
             if cancelled():
@@ -1191,8 +1290,33 @@ def search(kind, conditions, want=200, max_pages=25, progress=None,
             seen.add(ident)
             new_count += 1
             scanned += 1
+            if resume is not None:
+                resume['display_scanned'] = scanned
+            if scanned % 16 == 0:
+                _report(progress, '正在核查候选…', phase='details' if detailed else 'fetch',
+                        scanned=scanned, total=total, hits=len(out), want=want)
             if is_excluded_system(kind, r):
                 continue
+            if detailed and id(r) in block_for and block_for[id(r)] not in prepared:
+                index = block_for[id(r)]
+                block, shared_bodies = blocks[index], {}
+                try:
+                    if kind == 'systems':
+                        system_filters.prepare(block, conditions, stop=stop, max_pages=max_pages,
+                                               body_records=shared_bodies,
+                                               progress=lambda: _report(progress, '正在复核星系详细条件…',
+                                                   phase='details', scanned=scanned, hits=len(out),
+                                                   total=total, page=page, pages=max_pages, want=want))
+                    if ring_details:
+                        import ring_conditions
+                        non_ring = [c for c in conditions if c.get('type') != 'rings']
+                        ring_survivors = [row for row in block if match_candidate(
+                            kind, row, non_ring, coord_cache, template['filters'], missing)]
+                        ring_conditions.prepare(kind, ring_survivors, conditions, stop=stop, body_records=shared_bodies)
+                    prepared.add(index)
+                except InterruptedError:
+                    reason, interrupted = '已手动停止，返回部分结果', True
+                    break
             r.pop("_distances", None)
             if match_candidate(kind, r, conditions, coord_cache, template["filters"], missing):
                 for c in conditions:
@@ -1201,7 +1325,10 @@ def search(kind, conditions, want=200, max_pages=25, progress=None,
                 # Tool-specific checks run before a match consumes the result limit.
                 if row_filter is not None and not row_filter(r):
                     continue
-                out.append(r)
+                emitted_key = (r.get('id') if kind == 'stations' else r.get('id64'), r.get('system_name'), r.get('name'))
+                if emitted_key not in emitted:
+                    out.append(r)
+                    emitted.add(emitted_key)
                 if len(out) >= want:
                     reason = "已达到所需结果数，返回首批命中"
                     break
@@ -1209,7 +1336,7 @@ def search(kind, conditions, want=200, max_pages=25, progress=None,
         _report(progress, f"服务器直查第{page+1}页, 已扫 {scanned}, 命中 {len(out)} (有效率{eff})...",
                 phase="page", scanned=scanned, hits=len(out), total=total,
                 page=page + 1, pages=max_pages, per=per, want=want)
-        if cancelled() or len(out) >= want:
+        if cancelled() or interrupted or len(out) >= want:
             break
         if not new_count:
             reason = "服务器重复返回同一批候选，检索未完成"
@@ -1218,6 +1345,8 @@ def search(kind, conditions, want=200, max_pages=25, progress=None,
             reason = "候选分页已取完"
             break
         page += 1
+        if resume is not None:
+            resume.pop('batch', None)
     if isinstance(total, (int, float)) and total >= 10000:
         notes.append("服务器候选计数已封顶 (10000)，不代表全库总数")
     if missing:
@@ -1235,6 +1364,8 @@ def module_spec_suffix(c):
         parts.append("/".join(f"{v}级" for v in c["class"]))
     if c.get("rating"):
         parts.append("/".join(f"{v}级" for v in c["rating"]))
+    if c.get('weapon_mode'):
+        parts.append(c['weapon_mode'])
     return f" [{'/'.join(parts)}]" if parts else ""
 
 
@@ -1246,8 +1377,11 @@ def fresh_suffix(c):
 
 
 def cond_desc(c):
+    if c.get('type') == 'rings':
+        import ring_conditions
+        return '星环条件: ' + ring_conditions.MODES[c['mode']] + (' / ' + ', '.join(c['values']) if c.get('values') else '')
     if c.get('type') == 'system_details':
-        return '天体／最近有人条件'
+        return '天体／站点／最近有人条件'
     if c.get("type") == "distance":
         mode = "内" if c.get("mode", "inside") == "inside" else "外"
         from result_format import format_ly
@@ -1285,6 +1419,9 @@ def diagnose(kind, conditions, pages=3):
         if len(rs) < 100:
             break
     stats = []
+    if any(c.get('type') == 'rings' for c in conditions):
+        import ring_conditions
+        ring_conditions.prepare(kind, sample, conditions)
     if kind == 'systems' and any(c.get('type') == 'system_details' or c.get('field') in COUNT_FIELDS for c in conditions):
         import system_filters
         system_filters.prepare(sample, conditions, max_pages=pages)
@@ -1294,6 +1431,9 @@ def diagnose(kind, conditions, pages=3):
             r.pop("_distances", None)
             if c.get("type") == "distance":
                 if match_distance(kind, r, c, dict(coord_cache)):
+                    hit += 1
+            elif c.get('type') == 'rings':
+                if ring_conditions.outcome(r, c) is True:
                     hit += 1
             elif c.get('type') == 'system_details':
                 import system_filters

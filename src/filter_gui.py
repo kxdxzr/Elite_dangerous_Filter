@@ -3,6 +3,7 @@
 关闭时自动记住条件, 下次打开恢复。
 """
 import csv
+import copy
 from export_metadata import PROJECT_VERSION, write_csv_provenance
 import json
 import os
@@ -598,6 +599,8 @@ class Row:
         if self.v_category.get() not in groups:
             self.v_category.set('不限')
         keys = fields_for(fields, self.v_category.get())
+        # Ring presence and type share the dedicated, scope-aware entry.
+        keys = [key for key in keys if key != 'body_has_rings']
         labels = [field_label(kind, k) for k in keys]
         self.cb_field["values"] = labels
         cur_en = parse_field_label(self.field.get())
@@ -650,7 +653,13 @@ class Row:
     def _refresh_spec_options(self):
         """One specification dropdown; no class/rating cross product."""
         names = [s.strip() for s in self.val.get().replace('，', ';').replace(',', ';').split(';') if s.strip()]
-        self.cb_spec['values'] = ['不限'] + fo.get_module_variants(names)
+        variants = fo.get_module_variants(names)
+        if getattr(self, 'show_weapon_mounts', False):
+            from weapon_mounts import specification_choices
+            choices, labels = specification_choices(names, variants)
+            self.cb_spec.configure(values=['不限'] + choices, value_labels=labels)
+        else:
+            self.cb_spec['values'] = ['不限'] + variants
         if self.v_spec.get() == self._spec_display:
             self._sync_spec_display()
 
@@ -661,6 +670,8 @@ class Row:
             display = '不限'
         elif len(classes) == len(ratings) == 1:
             display = classes[0] + ratings[0]
+            if getattr(self, 'show_weapon_mounts', False) and getattr(self, '_weapon_mode', ''):
+                display += '|' + self._weapon_mode
         else:
             # Preserve old partial/multiple filters without inventing paired variants.
             display = f"class={';'.join(classes) or '*'} / rating={';'.join(ratings) or '*'}"
@@ -679,6 +690,12 @@ class Row:
             self._spec_display = self.v_spec.get()
             return
         raw = self.v_spec.get().strip().upper()
+        mount = ''
+        if getattr(self, 'show_weapon_mounts', False) and '|' in raw:
+            raw, mode = raw.split('|', 1)
+            mount = {'FIXED': 'Fixed', 'GIMBALLED': 'Gimballed', 'TURRETED': 'Turreted'}.get(mode)
+            if not mount:
+                raise ValueError('请选择有效的武器支架')
         if not raw or raw == '不限':
             self.v_class.set('')
             self.v_rating.set('')
@@ -687,6 +704,7 @@ class Row:
             self.v_rating.set(raw[1])
         else:
             raise ValueError('规格请填写如 2C、5A，或选择不限')
+        self._weapon_mode = mount
         self._sync_spec_display()
 
     def _toggle_fresh(self):
@@ -944,6 +962,8 @@ class Row:
                     d["class"] = rc
                 if rr:
                     d["rating"] = rr
+                if getattr(self, 'show_weapon_mounts', False) and getattr(self, '_weapon_mode', ''):
+                    d['weapon_mode'] = self._weapon_mode
             # 船/模块集成新鲜度 (卖X且数据N天内新)
             if f in FRESH_FIELDS_ROWS and op in ("in", "=", "contains"):
                 days = fresh_opt_days(self.v_fresh.get())
@@ -1055,15 +1075,20 @@ class App:
         self.btn_stop = ttk.Button(top, text="停止", command=self.stop_search,
                                    state="disabled")
         self.btn_stop.pack(side="left", padx=4)
+        self.btn_continue = ttk.Button(top, text='继续检索', command=lambda: self.run(continuing=True), state='disabled')
+        self.btn_continue.pack(side='left', padx=4)
         ttk.Button(top, text="诊断", command=self.diagnose).pack(side="left")
         ttk.Button(top, text="导出CSV", command=self.export).pack(side="left", padx=4)
 
         details_bar = ttk.Frame(root, padding=(6, 2))
         details_bar.pack(fill='x')
-        ttk.Button(details_bar, text='+ 天体／最近有人条件', command=self.add_system_details).pack(side='left', padx=4)
+        ttk.Button(details_bar, text='+ 天体／站点／最近有人条件', command=self.add_system_details).pack(side='left', padx=4)
+        ttk.Button(details_bar, text='+ 星环条件', command=self.add_rings).pack(side='left', padx=4)
         from usage_help import usage_help
         self.usage_help = usage_help(details_bar, (
-            '星系模式：数量用普通条件；天体组和最近有人距离用详细条件。',
+            '停止或网络异常后可继续；条件不变沿用断点，条件改变先确认再重查。断点仅保留在当前窗口，预计时间为动态估算，不含暂停等待。',
+            '整体显示候选覆盖与命中目标；本页步骤会随分页和分批循环。预计时间根据实测速度给出区间，无法可靠估算时明确提示。',
+            '星系模式：数量用普通条件；天体组、站点组和最近有人距离用详细条件。',
             '第三格可下拉/打字联想/点“选值…”多选 (选项≤30个直接下拉)。船/模块名打字联想+自动纠错，行内自带新鲜度选择。',
             'Archer 公共折扣因已报告的游戏 Bug 不计入；个人等级优惠另算',
             'Mahon：普通货架／船体增强优惠保留；Guardian HRP／SRP 因已报告的游戏 Bug 不计入',
@@ -1104,7 +1129,7 @@ class App:
         self.prog = ttk.Progressbar(progfrm, mode="determinate", maximum=100, value=0)
         self.prog.pack(side="left", fill="x", expand=True)
         self.prog_pct = tk.StringVar(value="")
-        ttk.Label(progfrm, textvariable=self.prog_pct, width=8).pack(side="left", padx=(4, 0))
+        ttk.Label(root, textvariable=self.prog_pct, justify='left', wraplength=1250).pack(fill='x', padx=6)
 
         result_frame = ttk.Frame(root)
         result_frame.pack(fill='both', expand=True, padx=6, pady=4)
@@ -1156,6 +1181,12 @@ class App:
     def add_distance(self):
         self.rows.append(Row(self.inner, self.kind.get(), "distance"))
 
+    def add_rings(self):
+        from ring_gui import RingRow
+        row = RingRow(self.inner, self.kind.get())
+        self.rows.append(row)
+        return row
+
     def add_system_details(self):
         if self.kind.get() != 'systems':
             messagebox.showinfo('提示', '请先切换为星系查询', parent=self.root)
@@ -1196,6 +1227,12 @@ class App:
 
     def _append_cond(self, c):
         """按一条条件字典建行 (读取文件/恢复会话共用), 条目损坏则跳过。"""
+        import ring_conditions
+        c = ring_conditions.legacy(c) if self.kind.get() == 'stations' else c
+        if c.get('type') == 'rings':
+            from ring_gui import RingRow
+            self.rows.append(RingRow(self.inner, self.kind.get(), c))
+            return
         if c.get('type') == 'system_details':
             from main_system_gui import DetailsRow
             row = DetailsRow(self.inner, self.kind.get())
@@ -1251,7 +1288,15 @@ class App:
             self.kind.set(d["kind"])
         if isinstance(d.get("rows"), list):
             for saved in d["rows"]:
-                if not isinstance(saved, dict) or saved.get("type") not in ("field", "distance", 'system_details'):
+                if not isinstance(saved, dict) or saved.get("type") not in ("field", "distance", 'system_details', 'rings'):
+                    continue
+                if saved['type'] == 'rings':
+                    from ring_gui import RingRow
+                    self.rows.append(RingRow(self.inner, self.kind.get(), saved))
+                    continue
+                if (self.kind.get() == 'stations' and saved.get('field') == 'body_has_rings'
+                        and saved.get('op') in ('是', '否')):
+                    self._append_cond(dict(field='body_has_rings', op='true' if saved['op'] == '是' else 'false'))
                     continue
                 if saved['type'] == 'system_details':
                     from main_system_gui import DetailsRow
@@ -1417,15 +1462,27 @@ class App:
             d = json.load(f)
         self._apply_state(d)
 
-    def run(self):
+    def run(self, continuing=False):
         try:
             conds = self.collect()
             want = max(1, min(2000, int(self.want.get())))
             maxpages = max(1, min(50, int(self.maxpages.get())))
+            kind = self.kind.get()
+            comparison = (kind, eng.normalize_conditions(kind, conds), want, maxpages)
         except ValueError as e:
             messagebox.showwarning("条件有误", str(e))
             return
-        kind = self.kind.get()
+        paused = getattr(self, '_main_checkpoint', {}).get('paused')
+        if paused:
+            if comparison != self._main_comparison:
+                if not messagebox.askyesno('重新开始检索', '查询条件或限制已改变。是否清除旧结果和断点，按新条件重新开始？', parent=self.root):
+                    return
+                continuing = False
+            else:
+                continuing = True
+                kind, conds, want, maxpages = copy.deepcopy(self._main_request)
+        elif continuing:
+            return
         try:
             p0 = eng.build_server_payload(kind, conds)
             blind = not p0["filters"] and "reference_system" not in p0
@@ -1435,21 +1492,29 @@ class App:
         except ValueError as exc:
             messagebox.showwarning("条件有误", str(exc))
             return
-        if blind and not messagebox.askyesno(
+        if blind and not continuing and not messagebox.askyesno(
                 "确认", "没有任何条件能推给服务器，将逐页硬扫全库\n(慢，且翻页上限内未必扫全)，继续吗？"):
             return
         self._stop = threading.Event()
         self.btn_run["state"] = "disabled"
         self.btn_stop["state"] = "normal"
+        self.btn_continue['state'] = 'disabled'
         self.status.set("查询中...")
         self.prog.stop()
         self.prog["mode"] = "indeterminate"
         self.prog.start(80)
         self.prog_pct.set("准备中")
-        self.results = []
-        self.tree.delete(*self.tree.get_children())
+        if not continuing:
+            self._main_checkpoint = {}
+            self._main_request = copy.deepcopy((kind, conds, want, maxpages))
+            self._main_comparison = copy.deepcopy(comparison)
+            self.results = []
+            self.tree.delete(*self.tree.get_children())
         self._result_conditions = conds
         self._result_kind = kind
+        if not hasattr(self, '_search_progress'):
+            self._search_progress = SearchProgress(self.prog, self.prog_pct, self.localizer)
+        self._search_progress.begin(continuing)
 
         def work():
             try:
@@ -1460,7 +1525,7 @@ class App:
                     progress=lambda msg, info=None: self._post(
                         self.root, self._apply_progress, msg, info or {}),
                     corrections=corr,
-                    stop=self._stop, notes=notes)
+                    stop=self._stop, notes=notes, resume=self._main_checkpoint)
                 self.results = rows
                 # 反哺规格学习库: 结果行里的在售条目自带 (name, class, rating)
                 for r in rows:
@@ -1501,15 +1566,19 @@ class App:
                                         new if p.strip().casefold() == old.casefold() else p.strip()
                                         for p in parts if p.strip()))
                     self._result_conditions = dconds
+                    self._main_comparison = copy.deepcopy((kind, dconds, want, maxpages))
                     self.render_main_results()
                     msg = f"服务器候选计数 {total:,}, 已复核 {scanned:,} 条, 命中 {len(rows):,} 条"
                     if corr:
                         msg += "；" + "、".join(f"'{a}'→'{b}'" for a, b in corr) + "已自动纠正"
                     if notes:
                         msg += "；" + "、".join(notes)
+                    if self._main_checkpoint.get('paused'):
+                        msg += '；' + self._main_checkpoint.get('error', '')
                     self.status.set(msg)
                     self.btn_run["state"] = "normal"
                     self.btn_stop["state"] = "disabled"
+                    self.btn_continue['state'] = 'normal' if self._main_checkpoint.get('paused') else 'disabled'
                     self.prog.stop()
                     self.prog["mode"] = "determinate"
                     if any("已达到所需结果数" in n or "候选分页已取完" in n for n in notes):
@@ -1531,6 +1600,7 @@ class App:
                     self.prog_pct.set("失败"),
                     self._search_progress.finish(False) if hasattr(self, '_search_progress') else None,
                     self.btn_run.__setitem__("state", "normal"),
+                    self.btn_continue.__setitem__('state', 'disabled'),
                     self.btn_stop.__setitem__("state", "disabled")))
 
         threading.Thread(target=work, daemon=True).start()

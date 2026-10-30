@@ -3,7 +3,7 @@ import re
 
 PROJECT_AUTHOR = 'kxdxzr'
 PROJECT_NAME = 'Elite_dangerous_Filter'
-PROJECT_VERSION = '0.1.4'
+PROJECT_VERSION = '0.1.4-r1'
 PROJECT_URL = 'https://github.com/kxdxzr/Elite_dangerous_Filter'
 
 
@@ -13,11 +13,12 @@ def windows_version_fields(version=None):
     match = re.fullmatch(r'(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?', version)
     if not match:
         raise ValueError('Application version must use major.minor.patch[-prerelease][+build]')
-    numeric = tuple(map(int, match.group(1, 2, 3))) + (0,)
+    revision = re.fullmatch(r'-r(\d+)', match.group(4) or '')
+    numeric = tuple(map(int, match.group(1, 2, 3))) + (int(revision.group(1)) if revision else 0,)
     if any(part > 65535 for part in numeric):
         raise ValueError('Windows version components must not exceed 65535')
     return dict(
-        filevers=numeric, prodvers=numeric, flags=0x2 if match.group(4) else 0,
+        filevers=numeric, prodvers=numeric, flags=0x2 if match.group(4) and not revision else 0,
         strings={
             'CompanyName': PROJECT_AUTHOR,
             'FileDescription': 'Elite Dangerous system and station filter',
