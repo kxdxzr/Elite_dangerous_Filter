@@ -84,6 +84,25 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         restored = self.app.engineer_shopping_window()
         self.assertEqual(restored.session_variables['destination'].get(), '')
 
+    def test_copy_engineer_system_without_search_and_keep_clipboard_on_empty(self):
+        import engineer_shopping_gui as ui
+        win = self.app.engineer_shopping_window()
+        win.clipboard_clear()
+        win.clipboard_append('Keep clipboard')
+        with patch.object(ui.messagebox, 'showinfo') as notice:
+            win.copy_engineer_system_button.invoke()
+            notice.assert_called_once()
+        self.assertEqual(win.clipboard_get(), 'Keep clipboard')
+        win.session_variables['destination'].set('Felicity Farseer — Deciat')
+        win.copy_engineer_system_button.invoke()
+        self.assertEqual(win.clipboard_get(), 'Deciat')
+        self.assertIsNone(win.search_state['result'])
+        self.app.set_language('en')
+        self.assertEqual(win.copy_engineer_system_button.cget('text'), 'Copy engineer system')
+        win.session_variables['destination'].set('Didi Vatermann — Leesti')
+        win.copy_engineer_system_button.invoke()
+        self.assertEqual(win.clipboard_get(), 'Leesti')
+
     def test_pad_selector_is_localized_readonly_and_survives_reopen(self):
         win = self.app.engineer_shopping_window()
         self.populate(win)
@@ -172,7 +191,7 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         row.v_class.set('')
         row.v_rating.set('')
         row._refresh_spec_options()
-        self.assertEqual(tuple(row.cb_spec['values']), ('不限', '2C', '3B', '4A'))
+        self.assertEqual(tuple(row.cb_spec['values']), ('不限', '2C（固定）', '3B（固定）', '4A（固定）'))
         row.v_spec.set('2C')
         module = win.criteria()[0].conditions[0]
         self.assertEqual((module['class'], module['rating']), ([2], ['C']))
@@ -184,6 +203,39 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         self.assertEqual(restored.purchase_row.v_spec.get(), '2 unfinished')
         with self.assertRaises(ValueError):
             restored.criteria()
+
+    def test_weapon_mount_labels_keep_raw_specs_language_and_session(self):
+        win = self.app.engineer_shopping_window()
+        self.populate(win)
+        row = win.purchase_row
+        row.val.set('Beam Laser')
+        row._refresh_spec_options()
+        self.assertIn('2D（固定）', row.cb_spec['values'])
+        self.assertIn('2D（万向）', row.cb_spec['values'])
+        self.assertNotIn('2D（固定／万向）', row.cb_spec['values'])
+        row.cb_spec._display.set('2D（万向）')
+        self.assertEqual(row.v_spec.get(), '2D|Gimballed')
+        before = win.criteria()
+        self.assertEqual((before[0].conditions[0]['class'], before[0].conditions[0]['rating']), ([2], ['D']))
+        self.assertEqual(before[0].conditions[0]['weapon_mode'], 'Gimballed')
+        self.app.set_language('en')
+        self.assertEqual(row.cb_spec._display.get(), '2D (Gimballed)')
+        self.assertIn('2E (Turreted)', row.cb_spec['values'])
+        self.assertEqual(win.criteria(), before)
+        saved = self.app._state_dict()['tools']['engineer_shopping']
+        self.assertEqual(row.editor_state()['module_spec'], '2D|Gimballed')
+        win.destroy()
+        self.app._tool_states['engineer_shopping'] = saved
+        restored = self.app.engineer_shopping_window()
+        self.assertEqual(restored.purchase_row.v_spec.get(), '2D|Gimballed')
+        self.assertEqual(restored.purchase_row.cb_spec._display.get(), '2D (Gimballed)')
+        self.assertEqual(restored.criteria(), before)
+        row = restored.purchase_row
+        row.val.set('Fuel Scoop')
+        row._refresh_spec_options()
+        self.assertEqual(row.cb_spec._value_labels, {})
+        self.assertIn('5A', row.cb_spec['values'])
+        self.assertNotIn('5A (Fixed)', row.cb_spec['values'])
 
     def test_search_separate_columns_csv_and_edited_form_keeps_result_snapshot(self):
         import engineer_shopping as tool
@@ -214,9 +266,10 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         self.assertFalse(win.search_state['busy'])
         tree = win.result_tree
         values = tree.item(tree.get_children()[0], 'values')
-        self.assertEqual(values[2:7], ('Shield Booster', '0', 'A', '15', 'Li Yong-Rui'))
-        self.assertEqual(values[7:12], ('Plasma Accelerator', '2', 'C', '15', 'Li Yong-Rui'))
-        self.assertEqual(values[-6:], ('2', '1', '1', '2', '0', '0.00'))
+        self.assertEqual(values[2:5], ('60.00', '40.00', '0.00'))
+        self.assertEqual(values[5:9], ('Shield Booster', '0A', '15', 'Li Yong-Rui'))
+        self.assertEqual(values[9:13], ('Plasma Accelerator', '2C', '15', 'Li Yong-Rui'))
+        self.assertEqual(values[-1], 'L')
         win.session_variables['origin'].set('Edited')
         win.session_variables['max_extra_jumps'].set('99')
         win.session_variables['ignore_carriers'].set(False)
@@ -225,7 +278,8 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         headers = [tree.heading(key, 'text') for key in tree['columns']]
         self.assertIn('Arrival distance ls', headers)
         self.assertIn('Distance to Leesti (ly)', headers)
-        self.assertIn('Estimated extra jumps', headers)
+        self.assertNotIn('Estimated extra jumps', headers)
+        self.assertNotIn('Coriolis Starport', tree.item(tree.get_children()[0], 'values'))
         self.assertIn('Matched modules (2)', headers)
         self.assertIn('Confirmed landing pad', headers)
         self.assertEqual(win.search_state['result']['landing_pad'], 'L')
@@ -237,8 +291,12 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         contents = ''.join(call.args[0] for call in output().write.call_args_list)
         self.assertFalse(any('\u3400' <= ch <= '\u9fff' for ch in contents))
         exported = list(csv.reader(io.StringIO(contents)))[6:]
-        self.assertEqual(exported[0], headers)
-        self.assertEqual(exported[1], list(tree.item(tree.get_children()[0], 'values')))
+        csv_headers, csv_records = tool.export_table(result, 'en', self.app.localizer.tr)
+        self.assertEqual(exported[0], csv_headers)
+        self.assertEqual(exported[1], csv_records[0])
+        self.assertIn('Estimated extra jumps', csv_headers)
+        self.assertEqual(exported[1][2:7], ['Shield Booster', '0', 'A', '15', 'Li Yong-Rui'])
+        self.assertEqual(exported[1][-6:], ['2', '1', '1', '2', '0', '0.00'])
 
     def test_shopping_list_add_remove_and_session_roundtrip_with_independent_drafts(self):
         win = self.app.engineer_shopping_window()

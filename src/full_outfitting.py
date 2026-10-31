@@ -267,16 +267,17 @@ def anchor_conditions(catalog):
 
 
 def request_json(url, payload=None, *, stop=None, progress=None):
-    """At most one transient retry; never change the shared engine transport."""
+    """Compatibility retry for custom transports; do not multiply transport retries."""
     if payload and url.endswith('/stations/search') and payload.get('page', 0) * payload.get('size', 0) >= 10000:
         raise ValueError('达到单来源10000条安全分页上限，请缩小检索半径')
     for attempt in range(2):
         catalogue.check_stop(stop)
         try:
-            return eng._http_json(url, payload)
+            with eng.request_control.context(stop, progress):
+                return eng._http_json(url, payload)
         except (urllib.error.URLError, TimeoutError) as exc:
             transient = not isinstance(exc, urllib.error.HTTPError) or exc.code in (500, 502, 503, 504)
-            if attempt or not transient:
+            if attempt or not transient or getattr(exc, 'elite_retry_exhausted', False):
                 raise
             if progress:
                 progress('请求暂时失败，重试一次…')

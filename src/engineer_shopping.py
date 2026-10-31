@@ -185,6 +185,27 @@ def search(criteria, want=100, max_pages=25, progress=None, stop=None):
     return result
 
 
+def display_table(result, language, tr):
+    """Compact on-screen results; keep the full CSV evidence unchanged."""
+    from main_csv import export_table as station_table
+    from result_format import format_ly
+
+    rows = result['rows'] if result else []
+    conditions = result['conditions'] if result else []
+    distances = [c for c in conditions if c.get('type') == 'distance']
+    remaining = [c for c in conditions if c.get('type') != 'distance' and c.get('field') != 'type']
+    headers, records = station_table(rows, 'stations', distances + remaining, language, tr,
+                                     compact_modules=True)
+    position = 2 + len(dict.fromkeys(c['ref_system'] for c in distances))
+    headers.insert(position, tr('绕行距离 ly'))
+    headers.append(tr('已确认停机坪'))
+    for row, record in zip(rows, records):
+        detour = row.get('_shopping_route', {}).get('detour_ly')
+        record.insert(position, format_ly(detour) if detour is not None else tr('情况未知'))
+        record.append(confirmed_pad(row) or tr('情况未知'))
+    return headers, records
+
+
 def export_table(result, language, tr):
     from main_csv import export_table as station_table
     from result_format import format_ly

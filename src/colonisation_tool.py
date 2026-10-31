@@ -9,6 +9,7 @@ import pve_cache
 
 
 BODY_FIELDS = {
+    'type': '天体类别', 'star_subtype': '恒星类型', 'is_main_star': '是否主星',
     'subtype': '星球类型', 'is_landable': '可着陆',
     'terraforming_state': '地球化状态', 'gravity': '重力 G',
     'distance_to_arrival': '到达距离 Ls', 'surface_temperature': '表面温度 K',
@@ -28,12 +29,32 @@ BODY_FIELDS = {
 RING_FIELDS = {key: value for key, value in BODY_FIELDS.items()
                if key.startswith('ring.') or key in ('distance_to_arrival', 'reserve_level', 'subtype')}
 NUMERIC_FIELDS = set(BODY_FIELDS) - {
+    'type', 'star_subtype',
     'subtype', 'is_landable', 'terraforming_state', 'atmosphere', 'volcanism_type',
     'is_rotational_period_tidally_locked', 'reserve_level', 'materials', 'signals', 'ring.type'}
-BOOL_FIELDS = {'is_landable', 'is_rotational_period_tidally_locked', '_is_moon', '_has_moons', '_is_binary'}
+BOOL_FIELDS = {'is_main_star', 'is_landable', 'is_rotational_period_tidally_locked', '_is_moon', '_has_moons', '_is_binary'}
 NUMERIC_FIELDS -= BOOL_FIELDS
 OPERATORS = ('=', '!=', 'in', '>', '>=', '<', '<=', 'between')
 VALUES = {
+    'type': ['Planet', 'Star'],
+    # Spansh /bodies/field_values/subtype, verified 2026-10-25. Display-only
+    # suggestions; unknown future types remain usable through manual entry.
+    'star_subtype': [
+        'O (Blue-White) Star', 'B (Blue-White) Star', 'A (Blue-White) Star',
+        'F (White) Star', 'G (White-Yellow) Star', 'K (Yellow-Orange) Star',
+        'M (Red dwarf) Star', 'L (Brown dwarf) Star', 'T (Brown dwarf) Star',
+        'Y (Brown dwarf) Star', 'Neutron Star', 'Black Hole', 'Supermassive Black Hole',
+        'A (Blue-White super giant) Star', 'B (Blue-White super giant) Star',
+        'F (White super giant) Star', 'G (White-Yellow super giant) Star',
+        'K (Yellow-Orange giant) Star', 'M (Red giant) Star', 'M (Red super giant) Star',
+        'C Star', 'CJ Star', 'CN Star', 'MS-type Star', 'S-type Star',
+        'Herbig Ae/Be Star', 'T Tauri Star',
+        'White Dwarf (D) Star', 'White Dwarf (DA) Star', 'White Dwarf (DAB) Star',
+        'White Dwarf (DAV) Star', 'White Dwarf (DAZ) Star', 'White Dwarf (DB) Star',
+        'White Dwarf (DBV) Star', 'White Dwarf (DBZ) Star', 'White Dwarf (DC) Star',
+        'White Dwarf (DCV) Star', 'White Dwarf (DQ) Star',
+        'Wolf-Rayet Star', 'Wolf-Rayet C Star', 'Wolf-Rayet N Star',
+        'Wolf-Rayet NC Star', 'Wolf-Rayet O Star'],
     'subtype': ['Earth-like world', 'Water world', 'Ammonia world', 'High metal content world',
                 'Metal-rich body', 'Rocky body', 'Rocky Ice world', 'Icy body',
                 'Class I gas giant', 'Class II gas giant', 'Class III gas giant',
@@ -175,6 +196,12 @@ def combine(values, mode='AND'):
 
 def condition_match(record, condition):
     key, op, expected = condition['field'], condition['op'], str(condition['value']).strip()
+    if key in ('star_subtype', 'is_main_star', 'subtype'):
+        required_type = 'Planet' if key == 'subtype' else 'Star'
+        if record.get('type') != required_type:
+            return False if record.get('type') else None
+        if key == 'star_subtype':
+            key = 'subtype'
     key = key.removeprefix('ring.')
     actual = record.get(key)
     if actual is None:
@@ -207,7 +234,10 @@ def condition_match(record, condition):
 
 
 def match_body_group(body, group):
-    if body.get('type') != 'Planet':
+    # Old groups remain planet-only, including radius/temperature-only groups.
+    # Selecting category or a star-specific field explicitly opts into stars.
+    explicit = any(c['field'] in ('type', 'star_subtype', 'is_main_star') for c in group)
+    if body.get('type') not in (('Planet', 'Star') if explicit else ('Planet',)):
         return False if body.get('type') else None
     basic = [c for c in group if not c['field'].startswith('ring.')]
     rings = [c for c in group if c['field'].startswith('ring.')]
@@ -325,6 +355,34 @@ def confirm_station_absence(names, refresh=False, stop=None):
 
 
 def load_bodies(names, refresh=False, stop=None):
+    """Reuse complete per-system records even when callers change their batches."""
+    import copy
+    result, missing = {}, []
+    unique = {name.casefold(): name for name in names}
+    for key, name in unique.items():
+        check_stop(stop)
+        hit, records = pve_cache.peek('body-system-v1:' + key, 300) if not refresh else (False, None)
+        if hit and isinstance(records, list):
+            result[key] = copy.deepcopy(records)
+        else:
+            missing.append(name)
+    if missing:
+        metadata = {}
+        with eng.request_control.context(stop):
+            loaded = _load_bodies_batch(missing, refresh, stop, metadata=metadata)
+        for name in missing:
+            key = name.casefold()
+            records = loaded.get(key)
+            if not isinstance(records, list):
+                raise ValueError('Missing system body coverage.')
+        for name in missing:
+            key = name.casefold()
+            pve_cache.put('body-system-v1:' + key, loaded[key], fetched_at=metadata.get('fetched_at'))
+            result[key] = copy.deepcopy(loaded[key])
+    return result
+
+
+def _load_bodies_batch(names, refresh=False, stop=None, metadata=None):
     """Fetch complete full-record pages; cache only successful reads."""
     def load():
         result = {name.casefold(): [] for name in names}
@@ -357,7 +415,10 @@ def load_bodies(names, refresh=False, stop=None):
                 return result
         raise ValueError('Body page limit reached; coverage incomplete.')
     key = 'colonisation-bodies-v1:' + '\n'.join(sorted(name.casefold() for name in names))
-    return pve_cache.cached(key, load, 300, refresh)[0]
+    records, info = pve_cache.cached(key, load, 300, refresh)
+    if metadata is not None:
+        metadata.update(info)
+    return records
 
 
 def largest_fixed_pad(system):
@@ -453,7 +514,58 @@ def populated_neighbour(system, radius, max_pages, stop=None, population_min=1, 
     return None, '', None, None
 
 
-def search(criteria, progress=None, stop=None, refresh=False):
+def _neighbours_batch(systems, criteria, stop):
+    """At most four requests in flight; preserve candidate order and exceptions."""
+    def lookup(system):
+        check_stop(stop)
+        evidence = {}
+        with eng.request_control.context(stop):
+            result = populated_neighbour(system, criteria.populated_radius, None, stop, evidence=evidence)
+        return result, evidence
+    results = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [(system['name'].casefold(), pool.submit(lookup, system)) for system in systems]
+        for key, future in futures:
+            try:
+                results[key] = future.result()
+            except Exception as error:
+                results[key] = error
+    return results
+
+
+def search(criteria, progress=None, stop=None, refresh=False, resume=None):
+    import json
+    import search_recovery
+    if resume is not None:
+        search_recovery.bind(resume, json.dumps(vars(criteria.validate()), sort_keys=True))
+    try:
+        with eng.request_control.context(stop, lambda text: eng._report(progress, text, stage='网络冷却', done=0, work_total=None)):
+            result = _search(criteria, progress, stop, refresh, resume)
+    except Exception as error:
+        if isinstance(error, InterruptedError) and resume is not None and stop is not None and stop.is_set():
+            result = (dict(scanned=resume.get('display_scanned', 0), total=resume.get('total', 0),
+                           unknown=resume.get('display_unknown', 0), complete=False,
+                           reason='Search cancelled; results are incomplete.', value_field=criteria.value_field),
+                      list(resume.get('rows', [])))
+        elif resume is None or not search_recovery.transient(error):
+            raise
+        else:
+            search_recovery.pause(resume, error)
+            return dict(scanned=resume.get('display_scanned', 0), total=resume.get('total', 0),
+                        unknown=resume.get('display_unknown', 0), complete=False,
+                        reason='Network interrupted; verified results retained. Continue to retry.',
+                        value_field=criteria.value_field, error=str(error)), list(resume.get('rows', []))
+    if resume is not None and stop is not None and stop.is_set() and resume.get('rows'):
+        info, _ = result
+        info.update(scanned=max(info['scanned'], resume.get('display_scanned', 0)),
+                    unknown=max(info['unknown'], resume.get('display_unknown', 0)),
+                    total=resume.get('total', info['total']))
+        result = info, list(resume['rows'])
+    search_recovery.finished(resume, stopped=bool(stop is not None and stop.is_set() and not result[0]['complete'] and len(result[1]) < criteria.want))
+    return result
+
+
+def _search(criteria, progress=None, stop=None, refresh=False, resume=None):
     c = criteria.validate()
     if stop is not None and stop.is_set():
         return dict(scanned=0, total=0, complete=False, unknown=0,
@@ -470,21 +582,53 @@ def search(criteria, progress=None, stop=None, refresh=False):
     if c.reference:
         canonical, reference_coords, _ = eng.resolve_ref(c.reference)
         payload['reference_system'] = canonical
-    rows, seen, scanned, unknown = [], set(), 0, 0
+    rows = resume.setdefault('rows', []) if resume is not None else []
+    seen = set(resume.get('seen', ())) if resume is not None else set()
+    scanned, unknown = (resume.get('scanned', 0), resume.get('unknown', 0)) if resume is not None else (0, 0)
+    emitted = {r.get('id64', r['name'].casefold()) for r in rows}
     complete, reason = False, 'Search incomplete.'
-    total = 0
+    total = resume.get('total', 0) if resume is not None else 0
+    verified = scanned
+    caller_progress = progress
+    plan = ['候选分页', '站点复核']
+    if c.body_groups or c.ring_groups:
+        plan.append('天体批次')
+    if c.populated_radius is not None or c.populated_min_distance is not None:
+        plan.append('最近有人星系核验')
+    plan.append('本页候选核查')
+    page = resume.get('page', 0) if resume is not None else 0
+    def progress(message, detail=None):
+        info = dict(detail or {})
+        stage = info.get('stage', '候选分页')
+        info['overall'] = dict(scanned=verified, total=total, hits=len(rows), want=c.want,
+                               page=page + 1, step=plan.index(stage) + 1 if stage in plan else 1,
+                               steps=len(plan), plan=plan, per=500)
+        eng._report(caller_progress, message, **info)
     try:
-        for page in count():
+        for page in count(resume.get('page', 0) if resume is not None else 0):
             check_stop(stop)
+            if resume is not None:
+                resume.update(page=page, seen=set(seen), scanned=scanned, unknown=unknown,
+                              display_scanned=scanned, display_unknown=unknown, total=total)
             if progress:
                 eng._report(progress, f'Page {page + 1}; scanned {scanned}; matches {len(rows)}',
                             scanned=scanned, total=total)
-            data = eng._http_json(eng.SPansh_BASE + '/systems/search', dict(payload, page=page), compressed=True)
+            import copy
+            data = resume.get('batch') if resume is not None else None
+            if data is None:
+                data = eng._http_json(eng.SPansh_BASE + '/systems/search', dict(payload, page=page), compressed=True)
+                if resume is not None:
+                    resume['batch'] = copy.deepcopy(data)
+            else:
+                data = copy.deepcopy(data)
+            check_stop(stop)
             candidates = data.get('results') if isinstance(data, dict) else None
             if not isinstance(candidates, list):
                 raise ValueError('Invalid system response.')
             if page == 0:
                 total = data.get('count', 0)
+            if resume is not None:
+                resume['total'] = total
             missing_stations = [s['name'] for s in candidates if isinstance(s, dict) and s.get('name')
                                 and number(s.get('population')) == 0 and s.get('needs_permit') is False
                                 and 'stations' not in s and not eng.is_excluded_system('systems', s)]
@@ -504,6 +648,8 @@ def search(criteria, progress=None, stop=None, refresh=False):
                     continue
                 seen.add(ident)
                 scanned += 1
+                if resume is not None:
+                    resume['display_scanned'] = scanned
                 added += 1
                 if system['name'].casefold() in confirmed:
                     system = dict(system, stations=confirmed[system['name'].casefold()])
@@ -530,21 +676,41 @@ def search(criteria, progress=None, stop=None, refresh=False):
                     system = dict(system, distance=distance)
                 accepted.append(system)
             bodies = {}
-            if c.body_groups or c.ring_groups:
-                chunks = [[r['name'] for r in accepted[i:i + 8]] for i in range(0, len(accepted), 8)]
-                with ThreadPoolExecutor(max_workers=4) as pool:
-                    eng._report(progress, 'Loading body records', stage='天体批次', done=0, work_total=len(chunks))
-                    for start in range(0, len(chunks), 4):
-                        check_stop(stop)
-                        futures = [pool.submit(load_bodies, chunk, refresh, stop) for chunk in chunks[start:start + 4]]
-                        for index, future in enumerate(futures, start + 1):
-                            bodies.update(future.result())
-                            eng._report(progress, f'Body batches {index}/{len(chunks)}; matches {len(rows)}',
-                                        stage='天体批次', done=index, work_total=len(chunks))
+            verified = scanned - len(accepted)
+            if resume is not None:
+                resume['display_unknown'] = unknown
+            block_end, neighbours = 0, {}
             for index, system in enumerate(accepted):
+                verified = scanned - len(accepted) + index
                 eng._report(progress, f'Checking candidate {index + 1}/{len(accepted)}',
                             stage='本页候选核查', done=index, work_total=len(accepted))
                 check_stop(stop)
+                if index >= block_end:
+                    near_enabled = c.populated_radius is not None or c.populated_min_distance is not None
+                    limit = 8 if near_enabled else 32
+                    block_end = min(len(accepted), index + min(limit, max(1, c.want - len(rows))))
+                    block = accepted[index:block_end]
+                    bodies = {}
+                    if c.body_groups or c.ring_groups:
+                        eng._report(progress, 'Loading body records', stage='天体批次', done=index,
+                                    work_total=len(accepted))
+                        chunks = [[row['name'] for row in block[start:start + 8]] for start in range(0, len(block), 8)]
+                        with ThreadPoolExecutor(max_workers=min(4, len(chunks))) as pool:
+                            futures = [pool.submit(load_bodies, chunk, refresh, stop) for chunk in chunks]
+                            for future in futures:
+                                bodies.update(future.result())
+                    neighbours = {}
+                    if c.populated_radius is not None or c.populated_min_distance is not None:
+                        eligible_neighbours = []
+                        for row in block:
+                            records = bodies.get(row['name'].casefold(), [])
+                            annotate_relationships(records)
+                            if combine([match_groups(records, c.body_groups, c.body_mode)[0],
+                                        match_groups(records, c.ring_groups, c.ring_mode, rings=True)[0]]) is True:
+                                eligible_neighbours.append(row)
+                        eng._report(progress, 'Verifying nearby systems', stage='最近有人星系核验',
+                                    done=index, work_total=len(accepted))
+                        neighbours = _neighbours_batch(eligible_neighbours, c, stop)
                 records = bodies.get(system['name'].casefold(), [])
                 annotate_relationships(records)
                 body_hit, body_names = match_groups(records, c.body_groups, c.body_mode)
@@ -557,8 +723,12 @@ def search(criteria, progress=None, stop=None, refresh=False):
                 neighbour, population, distance = '', None, None
                 neighbour_evidence = {}
                 if c.populated_radius is not None or c.populated_min_distance is not None:
-                    hit, neighbour, population, distance = populated_neighbour(
-                        system, c.populated_radius, None, stop, evidence=neighbour_evidence)
+                    if resume is not None:
+                        resume['display_unknown'] = unknown
+                    result = neighbours[system['name'].casefold()]
+                    if isinstance(result, Exception):
+                        raise result
+                    (hit, neighbour, population, distance), neighbour_evidence = result
                     if hit is None:
                         unknown += 1
                     if hit is not True:
@@ -576,12 +746,17 @@ def search(criteria, progress=None, stop=None, refresh=False):
                             _neighbour=neighbour, _neighbour_population=population,
                             _neighbour_pad=neighbour_evidence.get('pad', '情况未知') if neighbour else '',
                            _neighbour_distance=distance)
-                rows.append(row)
+                row_ident = row.get('id64', row['name'].casefold())
+                if row_ident not in emitted:
+                    rows.append(row)
+                    emitted.add(row_ident)
+                verified = scanned - len(accepted) + index + 1
                 if len(rows) >= c.want:
                     reason = 'Result limit reached; results are incomplete.'
                     break
             if len(rows) >= c.want:
                 break
+            verified = scanned
             eng._report(progress, f'Page {page + 1}; scanned {scanned}; matches {len(rows)}',
                         scanned=scanned, total=total)
             if candidates and not added:
@@ -591,7 +766,10 @@ def search(criteria, progress=None, stop=None, refresh=False):
                 complete = True
                 reason = 'All supplied candidate pages fetched.'
                 break
+            if resume is not None:
+                resume.pop('batch', None)
     except InterruptedError as exc:
         reason = str(exc)
+    eng._report(progress, reason, stage='本页候选核查', done=verified, work_total=total if 0 < total < 10000 else None)
     return dict(scanned=scanned, total=total, complete=complete, unknown=unknown,
                 reason=reason, value_field=c.value_field), rows

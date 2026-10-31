@@ -6,10 +6,28 @@ from unittest.mock import patch
 import engineer_shopping as tool
 import engineer_destinations as destinations
 import filter_engine as eng
-from i18n import translate
+from i18n import translate, message
 
 
 class EngineerShoppingTests(unittest.TestCase):
+    def test_compact_display_keeps_distances_first_and_full_csv_unchanged(self):
+        result = self.run_search([self.station(1, 160)])
+        before = copy.deepcopy(result)
+        for language in ('zh', 'en'):
+            tr = lambda text: translate(text, language)
+            headers, records = tool.display_table(result, language, tr)
+            full_headers, full_records = tool.export_table(result, language, tr)
+            self.assertEqual(headers[:4], full_headers[:2] +
+                             [message('csv.distance', language, reference=ref) for ref in ('Start', 'Leesti')])
+            self.assertEqual(headers[4], tr('绕行距离 ly'))
+            self.assertEqual(len(headers), len(records[0]))
+            self.assertIn('0A', records[0])
+            self.assertFalse(any('估算跳数' in h or 'estimated jumps' in h.lower() for h in headers))
+            self.assertLess(len(headers), len(full_headers))
+            self.assertNotIn('0A', full_records[0])
+            self.assertNotIn('Coriolis Starport', records[0])
+        self.assertEqual(result, before)
+
     def test_personal_bonus_search_export_and_assumption_snapshot(self):
         laser = dict(name='Beam Laser', category='hardpoint', weapon_mode='Fixed', **{'class': 2, 'rating': 'D'})
         condition = dict(field='modules', op='in', values=['Beam Laser'], discounted=True)

@@ -13,6 +13,8 @@ ROWS = [
     dict(type="distance", ref="", min="unfinished", max="", mode="范围外"),
 ]
 TOOLS = {
+    'hge': dict(reference='Leesti', radius='80', material='proto_radiolic', population='至少 1 亿',
+                freshness='近 3 小时', want='25', max_pages='7', require_manufactured_trader=True),
     'full_outfitting': dict(reference='Sirius', radius='180', want='12', max_pages='3',
                            other_discounts=True, neutral_ships=True, federal_ships=False,
                            imperial_ships=True, guardian=True, special_equipment=True, require_discount=True, ax_weapons=True,
@@ -34,7 +36,7 @@ SHOPPING_ROWS = [
             'module_slot': '通用插槽', 'condition_category': '不限', 'module_spec': '0A'}),
     dict(type='field', field='modules', op='属于其一', value='Plasma Accelerator',
          **{'class': '2', 'rating': 'C', 'fresh': '不限', 'discount': '不限',
-            'module_slot': '武器挂点', 'condition_category': '不限', 'module_spec': '2C'}),
+            'module_slot': '武器挂点', 'condition_category': '不限', 'module_spec': '2C|Fixed'}),
 ]
 TOOLS['engineer_shopping'] = dict(
     pledged_power='Jerome Archer',
@@ -82,10 +84,12 @@ def run(gui, phase, report_path):
         app.carrier_parking_window()
         app.midpoint_window()
         windows = {"rare_goods": rare, "pve": app.pve_window(),
+                    'hge': app.hge_window(),
                    'engineer_shopping': app.engineer_shopping_window(),
                    'full_outfitting': app.full_outfitting_window()}
         assert len(windows['engineer_shopping'].purchase_rows) == 2
         assert [c['values'] for c in windows['engineer_shopping'].criteria()[0].conditions[:2]] == [['Shield Booster'], ['Plasma Accelerator']]
+        assert windows['engineer_shopping'].criteria()[0].conditions[1]['weapon_mode'] == 'Fixed'
         for window in root.winfo_children():
             if isinstance(window, gui.tk.Toplevel):
                 if getattr(window, "_raw_title", "") == "航母车位查找":

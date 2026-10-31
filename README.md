@@ -1,14 +1,20 @@
-# Elite_dangerous_Filter
+# Elite Dangerous Filter
 
 English · [简体中文](README_zh-CN.md) · [Releases](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
-An Elite Dangerous desktop system/station filter using [Spansh](https://spansh.co.uk/) and other public data. Includes instant Chinese/English switching and System/Light/Dark appearance.
+![Elite Dangerous Filter: combine filters, plan equipment shopping and find your next destination](docs/social-preview.png)
 
-**Built for combining complex conditions**: multiple reference distances, actual module specifications, complete single-station shopping lists, discounts, planets and rings. A complement to simple Inara lookups, not a replacement.
+**Your conditions. The right destination.** A desktop tool for finding Elite Dangerous systems and stations using [Spansh](https://spansh.co.uk/) and other public data.
+
+Combine distance and planet filters, find a station for your equipment list, or shortlist your next colony or pirate-hunting location. Chinese / English switching, System / Light / Dark appearance, saved conditions and CSV export are built in. A complement to Inara and Spansh, not a replacement for every companion tool.
 
 ## Download and quick start
 
-[**Download Windows x64 EXE v0.1.4**](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/download/v0.1.4/EliteDangerousFilter.exe) · [Release notes](docs/releases/v0.1.4.md) · [All releases and source packages](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
+Development source adds [GitHub Release detection and confirmed automatic EXE replacement](docs/release-updates.md). Windows builds download and verify SHA256, then save conditions, exit, replace and restart with an old-EXE backup. Source runs or missing verification metadata fall back to the release page. Not included in the published v0.1.4-r1.
+
+> **v0.1.4-r1 revision:** the previously built package includes search recovery, ring/star refinements and separate weapon mounts. **HGE and the later Copy engineer system button remain development-source additions, not part of this release.** Read the [release notes and validation limitations](docs/releases/v0.1.4-r1.md).
+
+[**Download Windows x64 EXE v0.1.4-r1**](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/download/v0.1.4-r1/EliteDangerousFilter.exe) · [Release notes](docs/releases/v0.1.4-r1.md) · [Original v0.1.4](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/tag/v0.1.4) · [All releases and source packages](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
 1. Download `EliteDangerousFilter.exe`. No Python installation or API key required.
 2. Launch it: search systems/stations in the main window, or open a tool under **Extra tools**.
@@ -24,24 +30,81 @@ The EXE is **not code-signed**; Windows may show Unknown publisher or SmartScree
 certutil -hashfile EliteDangerousFilter.exe SHA256
 ```
 
-> Source and published assets can differ: current source and the local rebuild now embed Windows file/product version resources. The original GitHub v0.1.4 assets have not been replaced.
+> Use the release tag or accompanying source archive for code corresponding to the EXE. The original v0.1.4 assets are unchanged; v0.1.4-r1 includes same-station groups and separate non-carrier/orbital/planetary station counts, as well as Windows file/product version resources.
 
-## Tools
+## What can you do with it?
 
-| Tool | Purpose and key rules |
+### Combine filters instead of checking each requirement by hand
+
+- **Search around more than one system.** Combine reference distances, intersections and outside ranges with station facilities, economy, factions and record freshness.
+- **Match the equipment you actually need.** Filter module specifications using confirmed class/rating pairs, not invented combinations.
+- **Look for particular systems.** Combine planet and independent ring groups, station/faction counts and verified nearest-populated distance.
+
+For example: find a station selling a specified module within range of two reference systems, with a large landing pad and a short arrival distance. Separate rows use AND; choices within one multi-select row use OR.
+
+<details>
+<summary>See the main filter and system-detail editor</summary>
+
+Screenshots here and below were captured on 2026-10-20 from the original v0.1.4 in Light appearance. Yellow banners mark **offline illustrative fixtures**, not actual stock, missions, claimable systems or verified routes. They do not show all v0.1.4-r1 changes.
+
+![Main GUI in English](docs/images/main-gui-en.png)
+
+![Detailed system conditions in English](docs/images/main-system-details-en.png)
+
+</details>
+
+### Buy your equipment with fewer stops
+
+- **Find fully outfitted stations.** Check actual same-station stock against the known catalogue, with optional discounts, AX, Universal controllers, Merc, ships/armour and Guardian broker requirements. Carriers and Stronghold Carriers are excluded.
+- **Shop on the way to an engineer.** Give each item its own specification and find one station stocking **every item** on your trip to one of 25 ship engineers. Compare landing pads, arrival distance, freshness, discounts and estimated extra jumps.
+
+Unlike a multi-select OR filter, the shopping list requires all requested items at the same station. Unknown data never counts as confirmed stock; ambiguous Merc identities can prevent a strict match.
+
+<details>
+<summary>See full-outfitting checks and engineer shopping (offline demonstrations)</summary>
+
+![Find fully outfitted stations in English](docs/images/full-outfitting-finder-en.png)
+
+![Engineer trip shopping in English](docs/images/engineer-shopping-en.png)
+
+![Engineer shopping distance details in English](docs/images/engineer-shopping-route-details-en.png)
+
+</details>
+
+### Choose a destination for your next activity
+
+- **Colonisation candidates:** shortlist zero-population, explicitly permit-free, station-free systems by region, nearby populated space, value, planets and rings. A candidate is not a guarantee that the system is claimable.
+- **Pirate hunting (testing):** combine EDTools mission pairs and site records with Spansh factions, controlling Power, source-station access and target rings. Set the minimum mission-faction count to 0 to also search for RES systems outside the mission-pair catalogue. This is not a live mission board.
+- **HGE candidates (development source only, not in v0.1.4-r1):** user-supplied material rules matched against the controlling faction's allegiance/current states, with population and system-record-age dropdowns. Fresh queries, sortable results and system-name copying; no CSV. Not a live signal or guaranteed drop finder. See [scope and rules](docs/hge-finder.md).
+
+| Also included | What it helps you find |
 | --- | --- |
-| Main filter | Combine system/station conditions: AND between rows, OR within a multi-select row; multiple reference points, distance intersections/outside ranges, same-item specifications, freshness, station/faction counts and planet/ring groups |
-| Find fully outfitted stations | Check actual same-station ordinary/Power variants against the known catalogue; optional discounts, AX, Universal controllers, Merc, ships/armour and Guardian broker; excludes carriers and Stronghold Carriers |
-| Engineer trip shopping | Find one station stocking every specified item on the way to one of 25 ship engineers; independent specifications, discounts and freshness, plus pad, arrival distance and estimated extra jumps |
-| Rare goods target finder | 142 source entries across 138 systems; associated-Power filters and system-level grouping, with optional experimental neutron-alignment filtering |
-| Pirate massacre finder (testing) | EDTools mission pairs/sites with Spansh factions, controlling Power, source stations and target rings; minimum mission factions 0 expands RES-system discovery |
-| Carrier parking finder | Up to 50 ly, filtering recorded carrier counts by an optional maximum; counts are not live vacancies |
-| System midpoint | Find systems near the geometric midpoint of two systems, with distances to the midpoint and both endpoints |
-| Colonisation candidate finder | Zero-population, explicitly permit-free, station-free candidates; regional, nearest-populated, value, planet and independent ring conditions; not a claimability guarantee |
+| Rare goods targets | Targets for 142 source entries across 138 systems, grouped by system and filtered by associated Power; optional experimental neutron-alignment filtering |
+| Carrier parking reference | Systems within up to 50 ly matching a maximum recorded carrier count; **not live vacant slots** |
+| System midpoint | Systems near the geometric midpoint of two references, with distances to both endpoints |
 
-Module suggestions retain confirmed class/rating pairs instead of inventing combinations. Main-window OR conditions differ from shopping lists, where **every item must match**. Unknown data never counts as confirmed evidence.
+<details>
+<summary>See colonisation, pirate hunting and the other tools (offline demonstrations)</summary>
 
-### Find fully outfitted stations
+![Colonisation candidate finder in English](docs/images/colonisation-finder-en.png)
+
+![Colonisation details in English](docs/images/colonisation-finder-details-en.png)
+
+![Pirate massacre result overview in English](docs/images/pirate-massacre-finder-summary-en.png)
+
+![Pirate massacre distance details in English](docs/images/pirate-massacre-finder-en.png)
+
+![Rare goods target finder in English](docs/images/rare-goods-target-finder-en.png)
+
+![Carrier parking finder in English](docs/images/carrier-parking-finder-en.png)
+
+![System midpoint finder in English](docs/images/system-midpoint-finder-en.png)
+
+</details>
+
+## Know what the results mean
+
+### Full-outfitting scope and first scan
 
 - **The first scan is slow: minutes to more than ten minutes are possible.** Initial/manual discovery uses the widest shortlist within **20,000 ly of Sol**, primarily useful around the Bubble.
 - Subsequent conditions reuse local stock. Changing reference only retrieves missing coordinates and recalculates distances. Increasing radius does not discover stations outside the shortlist; results far from the Bubble may be unsuitable or empty.
@@ -70,72 +133,6 @@ See [full usage and validation](docs/full-outfitting.md) and [catalogue updates/
 - CSV begins with five `# ` provenance rows: author, project name, running version, timezone-aware export time and project URL. Some exports, including full outfitting, add search conditions, followed by a blank row, result header and data. **Do not hard-code skipping six lines: locate the separator/result header after metadata.**
 - CSV reflects the completed search, not edited-but-unsubmitted drafts. Main-window exports use condition-driven columns instead of full raw JSON. Provenance identifies the software, not ownership of third-party game data.
 
-## Screenshots
-
-Captured on 2026-10-20 from v0.1.4 in Light appearance, covering the main window and seven tools. All show **offline illustrative fixtures**, labelled by yellow banners—not actual stock, missions, claimable systems or verified routes. Click images for full resolution.
-
-### Main window
-
-![Main GUI in English](docs/images/main-gui-en.png)
-
-<details>
-<summary>Planet/ring groups and nearest-populated conditions</summary>
-
-![Detailed system conditions in English](docs/images/main-system-details-en.png)
-
-</details>
-
-### Find fully outfitted stations
-
-![Find fully outfitted stations in English](docs/images/full-outfitting-finder-en.png)
-
-### Engineer trip shopping
-
-![Engineer trip shopping in English](docs/images/engineer-shopping-en.png)
-
-<details>
-<summary>Distances, estimated jumps and detours</summary>
-
-![Engineer shopping distance details in English](docs/images/engineer-shopping-route-details-en.png)
-
-</details>
-
-### Rare goods target finder
-
-![Rare goods target finder in English](docs/images/rare-goods-target-finder-en.png)
-
-### Pirate massacre finder (testing)
-
-![Pirate massacre result overview in English](docs/images/pirate-massacre-finder-summary-en.png)
-
-<details>
-<summary>Source station and target ring distances</summary>
-
-![Pirate massacre distance details in English](docs/images/pirate-massacre-finder-en.png)
-
-</details>
-
-### Carrier parking finder
-
-Maximum-carrier filtering and recorded counts, not live vacancies.
-
-![Carrier parking finder in English](docs/images/carrier-parking-finder-en.png)
-
-### System midpoint finder
-
-![System midpoint finder in English](docs/images/system-midpoint-finder-en.png)
-
-### Colonisation candidate finder
-
-![Colonisation candidate finder in English](docs/images/colonisation-finder-en.png)
-
-<details>
-<summary>Value and matching-body details</summary>
-
-![Colonisation details in English](docs/images/colonisation-finder-details-en.png)
-
-</details>
-
 ## Run from source and build
 
 Requires **Python 3.10+ and tkinter**, with no third-party runtime dependencies. Check Tk with `python -m tkinter`; Debian/Ubuntu may require `python3-tk`.
@@ -160,6 +157,8 @@ Default output: **`dist/EliteDangerousFilter.exe`** inside the project. Applicat
 The actual EXE supports `--smoke-test <report.json>`, `--session-test write <report.json>` and `--session-test read <another-report.json>`. Run session write/read in separate processes with an isolated `ELITE_FILTER_DATA_DIR`; create report directories first to avoid touching personal sessions. Tk tests require a graphical display. CI covers Windows/Ubuntu and Python 3.10/3.13.
 
 Implementation is in `src/`, tests in `tests/`, helpers in `scripts/` and sample conditions in `examples/`. CLI usage: `python spansh_filter.py --help` and the [filter guide](docs/README_筛选器说明.txt) (Chinese). Refresh screenshots with `scripts/capture_screenshots.py` and optional developer dependency Pillow 12; it isolates sessions, blocks network access and records dimensions/hashes in the [manifest](docs/images/screenshots.json).
+
+Regenerate the feature covers with `python scripts/render_feature_cover.py` (Pillow and a CJK-capable font required). It produces the English `docs/social-preview.png` and Chinese `docs/social-preview-zh.png`, without network access or application data. README images use these files; the repository's GitHub social-preview setting must be updated separately by uploading the chosen image.
 
 ## Documentation and sources
 

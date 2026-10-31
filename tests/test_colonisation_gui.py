@@ -8,6 +8,113 @@ from unittest.mock import patch, mock_open
 
 @unittest.skipUnless(sys.platform == 'win32' or os.environ.get('DISPLAY'), 'Requires a GUI display')
 class ColonisationGuiTests(unittest.TestCase):
+    def test_changed_colony_limit_confirmed_restart_does_not_mix_results(self):
+        import colonisation_tool as tool
+        win = self.app.colonisation_window()
+        state = win.search_state
+        original = win.criteria()
+        state.update(criteria=original, refresh=False, checkpoint=dict(paused=True), rows=[dict(name='Old')])
+        win.session_variables['want'].set(str(original.want + 1))
+        def children(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from children(child)
+        buttons = {getattr(w, '_raw_text', ''): w for w in children(win)
+                   if isinstance(w, self.gui.ttk.Button)}
+        with patch.object(self.gui.messagebox, 'askyesno', return_value=False), \
+                patch.object(tool, 'search') as search:
+            buttons['查询'].invoke()
+            self.assertEqual(state['rows'], [dict(name='Old')])
+            search.assert_not_called()
+        with patch.object(self.gui.messagebox, 'askyesno', return_value=True), \
+                patch.object(tool.eng, '_http_json', return_value=dict(results=[])):
+            buttons['查询'].invoke()
+            deadline = time.monotonic() + 8
+            while state['busy'] and time.monotonic() < deadline:
+                self.root.update()
+                time.sleep(.01)
+            self.assertFalse(state['busy'])
+            self.assertEqual(state['rows'], [])
+            self.assertEqual(state['criteria'].want, original.want + 1)
+
+    def test_bad_gateway_keeps_partial_table_and_changed_query_requires_confirmation(self):
+        from urllib.error import HTTPError
+        import colonisation_tool as tool
+        win = self.app.colonisation_window()
+        def children(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from children(child)
+        buttons = {getattr(w, '_raw_text', ''): w for w in children(win)
+                   if isinstance(w, self.gui.ttk.Button)}
+        first = [dict(name=f'Candidate {i}', population=0 if i < 2 else 1,
+                      stations=[], needs_permit=False) for i in range(500)]
+        calls = []
+        def http(url, payload, **kwargs):
+            calls.append(payload['page'])
+            if len(calls) == 2:
+                raise HTTPError(url, 502, 'Bad Gateway', {}, None)
+            return dict(count=501, results=first if payload['page'] == 0 else [
+                dict(name='Final', population=0, stations=[], needs_permit=False)])
+        def wait():
+            deadline = time.monotonic() + 8
+            while win.search_state['busy'] and time.monotonic() < deadline:
+                self.root.update()
+                time.sleep(.01)
+            self.assertFalse(win.search_state['busy'])
+        with patch.object(tool.eng, '_http_json', side_effect=http), \
+                patch.object(self.gui.messagebox, 'askyesno', return_value=False), \
+                patch.object(self.gui.messagebox, 'showerror') as error:
+            buttons['查询'].invoke()
+            wait()
+            self.assertEqual(len(win.result_tree.get_children()), 2)
+            self.assertEqual(str(buttons['继续检索']['state']), 'normal')
+            win.session_variables['minimum_value'].set('1')
+            buttons['继续检索'].invoke()
+            self.assertEqual(len(win.result_tree.get_children()), 2)
+            self.assertEqual(calls, [0, 1])
+            win.session_variables['minimum_value'].set('')
+            self.app.set_language('en')
+            self.assertEqual(buttons['继续检索'].cget('text'), 'Continue search')
+            buttons['继续检索'].invoke()
+            wait()
+            self.assertEqual(len(win.result_tree.get_children()), 3)
+            self.assertTrue(win.search_state['info']['complete'])
+            self.assertEqual(calls, [0, 1, 1])
+            self.assertEqual(str(buttons['继续检索']['state']), 'disabled')
+            error.assert_not_called()
+
+    def test_star_editor_fields_language_and_session_in_both_windows(self):
+        from i18n import translate
+        import colonisation_tool as tool
+        for key in ('type', 'star_subtype', 'is_main_star'):
+            self.assertNotEqual(translate(tool.BODY_FIELDS[key], 'en'), tool.BODY_FIELDS[key])
+        groups = [[dict(field='type', op='=', value='Star'),
+                   dict(field='star_subtype', op='=', value='Neutron Star'),
+                   dict(field='is_main_star', op='=', value='true')]]
+        win = self.app.colonisation_window()
+        win.group_editors['body_groups'].add_group(groups[0])
+        before = win.criteria().body_groups
+        self.app.set_language('en')
+        self.assertEqual(before, win.criteria().body_groups)
+        notebook = win.group_editors['body_groups'].canvas.master.master.master
+        self.assertEqual(notebook.tab(notebook.tabs()[0], 'text'), 'Body conditions')
+        self.app._tool_states['colonisation'] = self.app._state_dict()['tools']['colonisation']
+        win.destroy()
+        restored = self.app.colonisation_window()
+        self.assertEqual(restored.criteria().body_groups, groups)
+        restored.destroy()
+        self.app.clear()
+        self.app.kind.set('systems')
+        self.app._append_cond(dict(type='system_details', body_groups=groups))
+        conditions = self.app.collect()
+        self.app._apply_state(self.app._state_dict())
+        self.assertEqual(self.app.collect(), conditions)
+        editor = self.app.rows[0].open_editor()
+        notebook = editor.group_editors['body_groups'].canvas.master.master.master
+        self.assertEqual(notebook.tab(notebook.tabs()[0], 'text'), 'Body conditions')
+        self.assertEqual(editor.group_editors['body_groups'].snapshot(), groups)
+
     def setUp(self):
         import filter_gui as gui
         self.gui = gui

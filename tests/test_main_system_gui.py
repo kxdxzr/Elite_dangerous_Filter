@@ -10,6 +10,104 @@ from unittest.mock import patch
 
 @unittest.skipUnless(sys.platform == 'win32' or os.environ.get('DISPLAY'), 'Requires a GUI display')
 class MainSystemGuiTests(unittest.TestCase):
+    def test_changed_query_restart_discards_old_results_only_after_confirmation(self):
+        self.app.clear()
+        self.app.kind.set('systems')
+        self.app._append_cond(dict(field='name', op='=', text='New'))
+        old = dict(name='Old')
+        self.app.results = [old]
+        self.app._result_kind = 'systems'
+        self.app._result_conditions = [dict(field='name', op='=', text='Old')]
+        self.app.render_main_results()
+        self.app._main_checkpoint = dict(paused=True, rows=[old])
+        self.app._main_request = ('systems', [dict(field='name', op='=', text='Old')], 200, 25)
+        self.app._main_comparison = self.app._main_request
+        with patch.object(self.gui.messagebox, 'askyesno', return_value=False), \
+                patch.object(self.gui.eng, 'search') as search:
+            self.app.run()
+            self.assertEqual(self.app.results, [old])
+            search.assert_not_called()
+        with patch.object(self.gui.messagebox, 'askyesno', return_value=True), \
+                patch.object(self.gui.eng, '_http_json', return_value=dict(results=[dict(name='New')])), \
+                patch.object(self.gui.fo, 'save_module_specs'):
+            self.app.run(continuing=True)
+            deadline = time.monotonic() + 8
+            while str(self.app.btn_run['state']) == 'disabled' and time.monotonic() < deadline:
+                self.root.update()
+                time.sleep(.01)
+            self.assertEqual([r['name'] for r in self.app.results], ['New'])
+            self.assertNotIn('Old', str(self.app.main_result_table()))
+
+    def test_bad_gateway_shows_partial_results_and_changed_query_requires_confirmation(self):
+        from urllib.error import HTTPError
+        self.app.clear()
+        self.app.kind.set('systems')
+        self.app._append_cond(dict(field='name', op='contains', text='Hit'))
+        self.app.want.set('3')
+        self.app.maxpages.set('3')
+        first = [dict(name='Hit A', id64=1), dict(name='Hit B', id64=2)] + [
+            dict(name=f'Other {i}', id64=i + 3) for i in range(498)]
+        calls = []
+        def http(url, payload, **kwargs):
+            calls.append(payload['page'])
+            if len(calls) == 2:
+                raise HTTPError(url, 502, 'Bad Gateway', {}, None)
+            return dict(count=501, results=first if payload['page'] == 0 else [dict(name='Hit C', id64=501)])
+        def wait():
+            deadline = time.monotonic() + 8
+            while str(self.app.btn_run['state']) == 'disabled' and time.monotonic() < deadline:
+                self.root.update()
+                time.sleep(.01)
+            self.root.update()
+            self.assertEqual(str(self.app.btn_run['state']), 'normal')
+        with patch.object(self.gui.eng, '_http_json', side_effect=http), \
+                patch.object(self.gui.messagebox, 'askyesno', return_value=True) as confirm, \
+                patch.object(self.gui.messagebox, 'showerror') as error, \
+                patch.object(self.gui.fo, 'save_module_specs'):
+            self.app.run()
+            wait()
+            self.assertEqual(len(self.app.tree.get_children()), 2)
+            self.assertEqual(str(self.app.btn_continue['state']), 'normal')
+            self.assertIn('Bad Gateway', self.app.status.get())
+            confirm.return_value = False
+            self.app.rows[0].val.set('Other')
+            self.app.btn_continue.invoke()
+            self.assertEqual(len(self.app.results), 2)
+            self.assertEqual(calls, [0, 1])
+            self.app.rows[0].val.set('Hit')
+            self.app.btn_continue.invoke()
+            wait()
+            self.assertEqual([r['name'] for r in self.app.results], ['Hit A', 'Hit B', 'Hit C'])
+            self.assertEqual(len(self.app.tree.get_children()), 3)
+            self.assertEqual(calls, [0, 1, 1])
+            self.assertEqual(str(self.app.btn_continue['state']), 'disabled')
+            error.assert_not_called()
+
+    def test_unified_ring_entry_restores_drafts_and_legacy_booleans(self):
+        self.app.clear()
+        self.app.kind.set('stations')
+        row = self.app.add_rings()
+        row.mode.set('指定类型')
+        row.types['Metallic'].set(True)
+        before = self.app.collect()
+        self.app.set_language('en')
+        self.assertEqual(row.scope.cget('text'), 'Rings: station host body')
+        self.assertEqual(self.app.collect(), before)
+        self.app._apply_state(self.app._state_dict())
+        self.assertEqual(self.app.collect(), before)
+        self.app._apply_state(dict(kind='stations', conditions=before))
+        self.assertEqual(self.app.collect(), before)
+        self.app.rows[0].types['Metallic'].set(False)
+        draft = self.app._state_dict()
+        self.app._apply_state(draft)
+        with self.assertRaises(ValueError):
+            self.app.collect()
+        self.app._apply_state(dict(kind='stations', conditions=[dict(field='body_has_rings', op='false')]))
+        self.assertEqual(self.app.collect()[0]['mode'], 'absent')
+        self.app.kind.set('systems')
+        self.app.refresh_fields()
+        self.assertEqual(self.app.rows[0].scope.cget('text'), 'Rings: any body in the system')
+
     def test_visible_copy_actions_across_result_windows(self):
         def descendants(widget):
             for child in widget.winfo_children():
@@ -63,12 +161,20 @@ class MainSystemGuiTests(unittest.TestCase):
             dict(field='is_landable', op='=', value='true'),
             dict(field='gravity', op='<=', value='1')])
         win.group_editors['ring_groups'].add_group([dict(field='ring.type', op='=', value='Metallic')])
+        win.group_editors['station_groups'].add_group([
+            dict(field='is_carrier', op='=', value='false'),
+            dict(field='has_large_pad', op='=', value='true'),
+            dict(field='services', op='=', value='Repair'),
+            dict(field='distance_to_arrival', op='<=', value='1000')])
         row.variables['population_min'].set('100')
         row.variables['nearest_min'].set('3')
         row.variables['nearest_max'].set('10')
         before = self.app.collect()
         self.app.set_language('en')
         self.assertEqual(win.title(), 'Main-window system details')
+        self.assertEqual(json.loads(row.variables['station_groups'].get())[0][2]['value'], 'Repair')
+        notebook = win.group_editors['station_groups'].canvas.master.master.master
+        self.assertEqual(notebook.tab(notebook.tabs()[-1], 'text'), 'Station condition groups')
         self.assertEqual(self.app.collect(), before)
         state = self.app._state_dict()
         self.app._apply_state(state)
@@ -85,6 +191,8 @@ class MainSystemGuiTests(unittest.TestCase):
         self.app.kind.set('systems')
         win = self.app.add_system_details()
         win.group_editors['body_groups'].add_group()
+        win.group_editors['station_groups'].add_group([
+            dict(field='distance_to_arrival', op='<=', value='unfinished')])
         row = self.app.rows[-1]
         row.variables['nearest_min'].set('unfinished')
         state = self.app._state_dict()
@@ -93,6 +201,21 @@ class MainSystemGuiTests(unittest.TestCase):
         self.assertEqual(self.app.rows[0].editor_state(), state['rows'][0])
         with self.assertRaises(ValueError):
             self.app.collect()
+
+    def test_station_count_fields_keep_total_and_restore_in_both_languages(self):
+        from system_filter_fields import STATION_COUNT_FIELDS
+        self.app.clear()
+        self.app.kind.set('systems')
+        for key in STATION_COUNT_FIELDS:
+            self.app._append_cond(dict(field=key, op='>=', text=0))
+        before = self.app.collect()
+        self.assertEqual({c['field'] for c in before}, set(STATION_COUNT_FIELDS))
+        self.app.set_language('en')
+        self.assertEqual(self.app.collect(), before)
+        self.app._apply_state(self.app._state_dict())
+        self.assertEqual(self.app.collect(), before)
+        self.app.set_language('zh')
+        self.assertEqual(self.app.collect(), before)
 
     def test_sale_discount_controls_and_session_roundtrip(self):
         self.app.clear()

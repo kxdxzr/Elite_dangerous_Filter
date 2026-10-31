@@ -28,7 +28,7 @@ a = Analysis(
                      "rare_neutron", "result_copy", "result_format", "search_progress", "export_metadata",
                      "engineer_shopping_gui", "engineer_shopping", "form_scroll",
                       "full_outfitting_gui", "full_outfitting", "outfitting_catalog", "outfitting_identity", "catalog_updates",
-                       "outfitting_snapshot", "translations"] + [
+                        "outfitting_snapshot", "hge_gui", "hge_tool", "translations"] + [
         "translations." + path.stem for path in (project / "src" / "translations").glob("*.py")
         if path.stem != "__init__"
     ],

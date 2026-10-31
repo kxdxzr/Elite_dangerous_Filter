@@ -1,11 +1,79 @@
 import unittest
 from unittest.mock import Mock
 
-from search_progress import measure, SearchProgress
+from search_progress import measure, SearchProgress, OverallEstimate
 from i18n import translate, message
 
 
 class ProgressTests(unittest.TestCase):
+    def test_overall_and_stage_are_both_visible_and_localized(self):
+        bar, label, localizer = Mock(), Mock(), Mock(language='en')
+        localizer.tr.side_effect = lambda s: translate(s, 'en')
+        localizer.message.side_effect = lambda key, **values: message(key, 'en', **values)
+        tracker = SearchProgress(bar, label, localizer)
+        tracker.begin()
+        tracker.update('', dict(done=2, work_total=8, stage='天体批次', overall=dict(
+            scanned=500, total=800, hits=4, want=50, page=2, step=3, steps=5)))
+        text = label.set.call_args.args[0]
+        self.assertIn('Overall: page 2', text)
+        self.assertIn('500/800', text)
+        self.assertIn('4/50', text)
+        self.assertIn('3/5', text)
+        self.assertIn('Body batches: 2/8', text)
+        self.assertIn('Elapsed', text)
+        tracker.finish(False)
+        self.assertIn('Paused / ended', label.set.call_args.args[0])
+        bar.after_cancel.assert_called()
+
+    def test_eta_requires_samples_and_unknown_totals_are_not_invented(self):
+        now = [0.0]
+        estimate = OverallEstimate(lambda: now[0])
+        estimate.begin()
+        for seconds, scanned in ((5, 50), (10, 100), (15, 150)):
+            now[0] = seconds
+            estimate.update(dict(scanned=scanned, total=500, hits=0, want=20))
+        lo, hi = estimate.remaining()
+        self.assertLessEqual(lo, 35)
+        self.assertGreaterEqual(hi, 35)
+        estimate.work['total'] = 10000
+        self.assertIsNone(estimate.remaining())
+        estimate.work['total'] = None
+        self.assertIsNone(estimate.remaining())
+
+    def test_target_eta_pause_time_and_resumed_replay(self):
+        now = [0.0]
+        estimate = OverallEstimate(lambda: now[0])
+        estimate.begin()
+        for seconds, scanned, hits in ((5, 50, 2), (10, 100, 4), (15, 150, 6)):
+            now[0] = seconds
+            estimate.update(dict(scanned=scanned, total=10000, hits=hits, want=12))
+        self.assertIsNotNone(estimate.remaining())
+        estimate.pause()
+        now[0] = 1000
+        self.assertEqual(estimate.seconds(), 15)
+        self.assertIsNone(estimate.remaining())
+        estimate.begin(continuing=True)
+        estimate.update(dict(scanned=50, total=10000, hits=2, want=12))
+        self.assertEqual(estimate.work['scanned'], 150)
+        self.assertEqual(estimate.work['hits'], 6)
+        self.assertIsNone(estimate.remaining())
+        now[0] += 5
+        self.assertEqual(estimate.seconds(), 20)
+        estimate.begin()
+        self.assertEqual(estimate.work, {})
+        self.assertEqual(estimate.seconds(), 0)
+
+    def test_long_stall_hides_previously_valid_eta(self):
+        now = [0.0]
+        estimate = OverallEstimate(lambda: now[0])
+        estimate.begin()
+        for seconds, scanned in ((5, 50), (10, 100), (15, 150)):
+            now[0] = seconds
+            estimate.update(dict(scanned=scanned, total=500, hits=0))
+        self.assertIsNotNone(estimate.remaining())
+        now[0] = 100
+        self.assertIsNone(estimate.remaining())
+
     def test_unknown_total_uses_static_count_not_bouncing_animation(self):
         bar, label, localizer = Mock(), Mock(), Mock(language='en')
         localizer.tr.side_effect = lambda s: translate(s, 'en')

@@ -1,5 +1,11 @@
 # Engineer trip shopping / 工程师途中采购
 
+**v0.1.4-r1 发布说明：**支架独立选择和对应库存核验包含在修订版 EXE 中；后来新增的“复制工程师星系名”按钮仅在开发源码，不包含在本次发行中。 / **v0.1.4-r1:** separate mounts and stock verification are included; the later Copy engineer system button remains development-source only, not part of this release.
+
+**支架选择（已纳入本地 v0.1.4-r1 重打包，尚未发布）：**单个武器名称的型号下拉按支架拆分，例如 `2D（固定）`、`2D（万向）`、`2E（炮塔）`，并支持英文切换。选择后要求同一库存条目的名称、型号及支架同时符合；明确的库存支架字段或装备符号可提供证据，未知或相互冲突的支架不算命中。CSV 对限定支架的采购项增加支架证据列。未知规格显示“支架未知”，不凭评级猜测。固定版本 EDCD/FDevIDs 提供离线选项，不代表站点库存。旧清单中的纯型号（如 `2D`）仍不限制支架；新选项连同支架保存，未完成草稿不丢失。
+
+**Mount selection (included in the local v0.1.4-r1 rebuild, not published):** weapon specifications are separate choices, e.g. `2D (Fixed)`, `2D (Gimballed)` and `2E (Turreted)`. The same stock item must match name, specification and selected mount. Explicit stock mount fields or symbol tokens provide evidence; unknown/conflicting mounts fail the restriction. CSV adds mount evidence for restricted purchases. Pinned EDCD/FDevIDs provides offline suggestions, not stock. Legacy plain codes remain mount-unrestricted; new selections retain their mount across language changes and sessions.
+
 **下一版源码调整：**移除满级优惠开关，选定 Power 后统一按满级适用武器优惠计算，未读取实际等级；选择“无”仅计算公共优惠。旧会话开关不再生效，下文开关说明仅适用于旧 Beta。
 
 **Next-version source change:** the checkbox is removed. Selecting a Power always assumes maximum-rank bonuses on applicable weapons, without reading actual rank; select None for public discounts only. Old checkbox values are ignored. Checkbox descriptions below refer to older Betas.
@@ -15,6 +21,8 @@
 界面短说明：**前往工程师途中，寻找少绕路的模组／舰载武器售卖点，可筛选已知折扣。**
 
 ## 输入与结果
+
+- **当前源码新增、尚未重新打包：**工程师下拉框旁的“复制工程师星系名”按钮复制当前选择的目的地星系（如 `Deciat`），不含工程师姓名，无需搜索或选择结果；未选工程师时提示并保留原剪贴板。
 
 - 出发星系可填写或联想；目的地只能从25位舰船工程师的“工程师名 — 星系”列表选择，包含Colonia与巫头地区，不含宇航服／手持武器工程师。名单来自[社区工程师列表](https://elite-dangerous.fandom.com/wiki/Engineers#Ship_Engineers)，核对日期2026-10-17。
 - 单跳航程由用户自行填写，80 ly只是可编辑的默认值，不假设已读取当前配船。

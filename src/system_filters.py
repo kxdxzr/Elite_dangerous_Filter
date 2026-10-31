@@ -7,12 +7,14 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 
 import colonisation_tool as bodies
-from system_filter_fields import COUNT_FIELDS
-FACTION_FIELDS = set(COUNT_FIELDS) - {'station_count', 'carrier_count'}
+from system_filter_fields import COUNT_FIELDS, STATION_COUNT_FIELDS
+import station_groups
+FACTION_FIELDS = set(COUNT_FIELDS) - STATION_COUNT_FIELDS.keys()
 
 
 def validate(condition):
     c = dict(condition)
+    station_groups.validate(c.get('station_groups', []), c.get('station_mode', 'AND'))
     if not isinstance(c.get('body_groups', []), list) or not isinstance(c.get('ring_groups', []), list):
         raise ValueError('Planet/ring groups must be lists.')
     try:
@@ -25,7 +27,8 @@ def validate(condition):
     c.update(type='system_details', field='__system_details__', op='matches',
              body_groups=checked.body_groups, ring_groups=checked.ring_groups,
              body_mode=checked.body_mode, ring_mode=checked.ring_mode,
-             nearest_min=checked.populated_min_distance, nearest_max=checked.populated_radius)
+              nearest_min=checked.populated_min_distance, nearest_max=checked.populated_radius)
+    c.update(station_groups=c.get('station_groups', []), station_mode=c.get('station_mode', 'AND'))
     c['population_min'] = (bodies.optional_number(c.get('population_min', 1))
                            if c['nearest_min'] is not None or c['nearest_max'] is not None else 1)
     if c['population_min'] is None:
@@ -75,7 +78,7 @@ def faction_counts(row):
     return result
 
 
-def prepare(rows, conditions, *, stop=None, max_pages=25, progress=None):
+def prepare(rows, conditions, *, stop=None, max_pages=25, progress=None, body_records=None):
     """Enrich supplied cheap-filter survivors in place; never impose colony rules."""
     fields = {c.get('field') for c in conditions} & COUNT_FIELDS.keys()
     specs = [c for c in conditions if c.get('type') == 'system_details']
@@ -84,7 +87,7 @@ def prepare(rows, conditions, *, stop=None, max_pages=25, progress=None):
         row.pop('_system_details', None)
         for key in fields:
             row[key] = None  # Never trust a server-provided value for derived fields.
-    if fields & {'station_count', 'carrier_count'}:
+    if fields & STATION_COUNT_FIELDS.keys():
         missing = [r['name'] for r in rows if 'stations' not in r and r.get('name')]
         confirmed = {}
         for start in range(0, len(missing), 16):
@@ -94,10 +97,8 @@ def prepare(rows, conditions, *, stop=None, max_pages=25, progress=None):
             stations = confirmed.get(row.get('name', '').casefold(), row.get('stations'))
             if not isinstance(stations, list) or any(not isinstance(s, dict) for s in stations):
                 continue
-            if 'station_count' in fields:
-                row['station_count'] = len(stations)
-            if 'carrier_count' in fields and all(isinstance(s.get('type'), str) and s['type'].strip() for s in stations):
-                row['carrier_count'] = sum('carrier' in s['type'].casefold() for s in stations)
+            values = station_groups.counts(stations)
+            row.update({key: values[key] for key in fields & STATION_COUNT_FIELDS.keys()})
     if fields & FACTION_FIELDS:
         for row in rows:
             counts = faction_counts(row)
@@ -105,6 +106,16 @@ def prepare(rows, conditions, *, stop=None, max_pages=25, progress=None):
     count_conditions = [c for c in conditions if c.get('field') in fields]
     detail_rows = [row for row in rows if all(bodies.eng.match_field('systems', row, c) for c in count_conditions)]
     detail_ids = {id(row) for row in detail_rows}
+    full_stations = {}
+    if any(c['station_groups'] for c in specs):
+        names = sorted({r['name'] for r in detail_rows if r.get('name')}, key=str.casefold)
+        # Embedded system stations omit fields such as is_planetary/economy.
+        # Fetch complete station pages; never splice facts from nearby stations.
+        for start in range(0, len(names), 16):
+            bodies.check_stop(stop)
+            full_stations.update(bodies.confirm_station_absence(names[start:start + 16], stop=stop))
+            if progress:
+                progress()
     full_bodies = {}
     if any(c['body_groups'] or c['ring_groups'] for c in specs):
         names = sorted({r['name'] for r in detail_rows if r.get('name')}, key=str.casefold)
@@ -124,12 +135,17 @@ def prepare(rows, conditions, *, stop=None, max_pages=25, progress=None):
             continue
         records = full_bodies.get(row.get('name', '').casefold(), [])
         bodies.annotate_relationships(records)
-        evidence = dict(counts={key: row.get(key) for key in sorted(fields)}, groups=[], neighbours=[])
+        evidence = dict(counts={key: row.get(key) for key in sorted(fields)}, groups=[], neighbours=[], stations=[])
         memo = {}
         for index, c in enumerate(specs, 1):
             body_hit, planets = bodies.match_groups(records, c['body_groups'], c['body_mode'])
             ring_hit, rings = bodies.match_groups(records, c['ring_groups'], c['ring_mode'], rings=True)
             values = [body_hit, ring_hit]
+            station_hit, matches = station_groups.match_groups(
+                full_stations.get(row.get('name', '').casefold()), c['station_groups'], c['station_mode'])
+            values.append(station_hit)
+            if matches:
+                evidence['stations'].append(dict(condition=index, groups=matches))
             if bodies.combine(values) is not False and (c['nearest_min'] is not None or c['nearest_max'] is not None):
                 key = (c['population_min'], c['nearest_max'])
                 if key not in memo:
@@ -146,6 +162,8 @@ def prepare(rows, conditions, *, stop=None, max_pages=25, progress=None):
                 evidence['groups'].append(dict(condition=index, planets=planets, rings=rings))
         evidence['relationships'] = '; '.join(f"{b['name']}: {b['_relations']}" for b in records if b.get('_relations'))
         row['_system_details'] = evidence
+    if body_records is not None:
+        body_records.update(full_bodies)
 
 
 def summary(row):
@@ -158,7 +176,10 @@ def summary(row):
                 parts.append(f"{field}[{group['condition']}]: {group[field]}")
     for neighbour in details.get('neighbours', []):
         parts.append(f"nearest(pop>{format_population(neighbour['population_min'], '?')}): {neighbour['name']} "
-                      f"/ pop {format_population(neighbour['population'], '?')} / {format_ly(neighbour['distance'], '?')} ly")
+                       f"/ pop {format_population(neighbour['population'], '?')} / {format_ly(neighbour['distance'], '?')} ly")
+    for item in details.get('stations', []):
+        for group in item['groups']:
+            parts.append(f"stations[{item['condition']}.{group['group']}]: {'; '.join(group['names'])}")
     if details.get('relationships'):
         parts.append(details['relationships'])
     return ' | '.join(parts)

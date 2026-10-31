@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import filedialog
 
 import engineer_shopping as tool
-from engineer_destinations import CHOICES, destination_choice
+from engineer_destinations import CHOICES, destination_choice, destination_system
 from export_metadata import write_csv_provenance
 from localized_tk import ttk, messagebox, Toplevel
 from powerplay_tool import POWERS, POWER_LABELS, normalize_power
@@ -36,6 +36,17 @@ def open_window(app):
     variables['ignore_carriers'] = tk.BooleanVar(win, value=True)
     variables['ignore_planetary'] = tk.BooleanVar(win, value=False)
     variables['purchases'] = tk.StringVar(win, value='')
+
+    def copy_engineer_system():
+        try:
+            system = destination_system(variables['destination'].get())
+        except ValueError as exc:
+            messagebox.showinfo('提示', str(exc), parent=win)
+            return False
+        win.clipboard_clear()
+        win.clipboard_append(system)
+        return True
+
     route = ttk.LabelFrame(form, text='行程与航程', padding=8)
     route.pack(fill='x', padx=8, pady=6)
     for index, (key, title) in enumerate((('origin', '出发星系'), ('destination', '目标工程师／星系'),
@@ -48,7 +59,12 @@ def open_window(app):
         ttk.Label(route, text=title, wraplength=110).grid(
             row=grid_row, column=grid_column * 2, sticky='w', padx=4)
         if key == 'destination':
-            entry = ttk.Combobox(route, textvariable=variables[key], values=CHOICES, state='readonly', width=36)
+            destination_cell = ttk.Frame(route)
+            entry = ttk.Combobox(destination_cell, textvariable=variables[key], values=CHOICES, state='readonly', width=36)
+            entry.pack(side='left', fill='x', expand=True)
+            win.copy_engineer_system_button = ttk.Button(destination_cell, text='复制工程师星系名',
+                                                         command=copy_engineer_system)
+            win.copy_engineer_system_button.pack(side='right', padx=(4, 0))
             win.destination_box = entry
         elif key == 'origin':
             entry = ttk.Combobox(route, textvariable=variables[key], width=24)
@@ -65,7 +81,8 @@ def open_window(app):
         else:
             entry = ttk.Entry(route, textvariable=variables[key], width=12)
         entry.configure(width=20)
-        entry.grid(row=grid_row, column=grid_column * 2 + 1, sticky='ew', padx=4, pady=2)
+        (destination_cell if key == 'destination' else entry).grid(
+            row=grid_row, column=grid_column * 2 + 1, sticky='ew', padx=4, pady=2)
         route.columnconfigure(grid_column * 2 + 1, weight=1)
 
     purchase = ttk.LabelFrame(form, text='采购模组／舰载武器', padding=5)
@@ -128,6 +145,7 @@ def open_window(app):
 
     def add_purchase(saved=None):
         row = Row(purchase_frame, 'stations')
+        row.show_weapon_mounts = True
         row.cb_val.configure(width=40)
         row.field.set(field_label('stations', 'modules'))
         row.v_discount.set('是')
@@ -180,7 +198,7 @@ def open_window(app):
     win.usage_help = usage_help(purchase_actions, (
         '前往工程师途中，寻找少绕路的模组／舰载武器售卖点，可筛选已知折扣。',
         '自动覆盖单跳和多跳；额外跳数相对直达估算。未验证实际航线，排序仅针对已取回的命中。',
-        '每项独立选择规格、折扣和新鲜度；到站距离留空不限，不核实购买数量。',
+        '武器型号按支架分开选择，并核实同件库存；到站距离留空不限，不核实数量。',
     ), inline=True)
     win.personal_discount_note = ttk.Label(form,
         text='选择效忠 Power 后假设已解锁最高等级奖励，未读取实际等级；仅限本势力领地内适用武器，不与公共优惠相加，航母不计入。',
@@ -227,7 +245,7 @@ def open_window(app):
         return tool.export_table(state['result'], app.localizer.language, app.localizer.tr)
 
     def render():
-        headers, records = table()
+        headers, records = tool.display_table(state['result'], app.localizer.language, app.localizer.tr)
         columns = tuple(f'value_{index}' for index in range(len(headers)))
         tree.set_columns(columns)
         for key, title in zip(columns, headers):
