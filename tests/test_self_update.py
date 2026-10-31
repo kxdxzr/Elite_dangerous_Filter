@@ -116,10 +116,16 @@ class SelfUpdateTests(unittest.TestCase):
                               failed=str(folder / 'failed.exe'), ready=str(folder / 'ready'),
                               go=str(folder / 'go'), log=str(folder / 'update.log'))
                 script, conf = folder / 'helper.ps1', folder / 'config.json'
-                script.write_text(update.HELPER, encoding='utf-8-sig')
+                # Simulate runners where Windows PowerShell cannot resolve the
+                # Get-FileHash function from its inherited module search path.
+                helper = update.HELPER.replace('$changed = $false',
+                    '$changed = $false\n'
+                    "function Get-FileHash { throw 'Get-FileHash unavailable in runner simulation' }")
+                script.write_text(helper, encoding='utf-8-sig')
                 conf.write_text(json.dumps(config), encoding='utf-8')
                 process = subprocess.Popen([str(powershell), '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-                                            '-File', str(script), '-Config', str(conf)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                                            '-File', str(script), '-Config', str(conf)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                           env=dict(os.environ, PSModulePath=str(folder / 'missing-modules')))
                 try:
                     deadline = time.monotonic() + 15
                     while not Path(config['ready']).exists() and process.poll() is None and time.monotonic() < deadline:
@@ -145,6 +151,9 @@ class SelfUpdateTests(unittest.TestCase):
                     elif fail:
                         self.assertTrue(Path(config['failed']).exists(), diagnostics)
                         self.assertEqual(Path(config['failed']).read_bytes(), payload)
+                    else:
+                        self.assertIn('Staged EXE hash changed', diagnostics)
+                        self.assertFalse(Path(config['backup']).exists())
                     self.assertTrue(Path(config['log']).exists())
                 finally:
                     if process.poll() is None:

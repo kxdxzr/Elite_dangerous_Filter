@@ -31,7 +31,16 @@ try {
     $phase = 'Waiting for old process to exit'
     if ($parent -and !$parent.WaitForExit(60000)) { throw 'Old process did not exit; update cancelled.' }
     $phase = 'Verifying staged EXE hash'
-    if ((Get-FileHash -LiteralPath $c.staged -Algorithm SHA256).Hash.ToLowerInvariant() -ne $c.sha256) {
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = [IO.File]::OpenRead($c.staged)
+        $actualHash = [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+    } finally {
+        if ($stream) { $stream.Dispose() }
+        $hasher.Dispose()
+    }
+    if ($actualHash -ne $c.sha256) {
         throw 'Staged EXE hash changed; update cancelled.'
     }
     $phase = 'Replacing EXE and backing up old file'
