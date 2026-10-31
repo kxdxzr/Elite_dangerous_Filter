@@ -56,11 +56,13 @@ try {
         }
     }
     $phase = 'Launching updated EXE'
+    # Let new and rollback children inherit a clean PyInstaller restart request.
+    # Avoid PowerShell adapting ProcessStartInfo.EnvironmentVariables as $null.
+    $env:PYINSTALLER_RESET_ENVIRONMENT = '1'
     $start = New-Object Diagnostics.ProcessStartInfo
     $start.FileName = $c.target
     $start.WorkingDirectory = [IO.Path]::GetDirectoryName($c.target)
     $start.UseShellExecute = $false
-    $start.EnvironmentVariables['PYINSTALLER_RESET_ENVIRONMENT'] = '1'
     $process = [Diagnostics.Process]::Start($start)
     if (!$process) { throw 'Unable to launch updated EXE.' }
     [IO.File]::WriteAllText($c.log, 'Update installed; old EXE retained at ' + $c.backup)
@@ -73,7 +75,6 @@ try {
             $restart.FileName = $c.target
             $restart.WorkingDirectory = [IO.Path]::GetDirectoryName($c.target)
             $restart.UseShellExecute = $false
-            $restart.EnvironmentVariables['PYINSTALLER_RESET_ENVIRONMENT'] = '1'
             [void][Diagnostics.Process]::Start($restart)
             $failure += "`nOld EXE restored."
         } catch { $failure += "`nRestore failed: " + $_.Exception.Message }

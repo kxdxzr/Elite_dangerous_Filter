@@ -121,11 +121,15 @@ class SelfUpdateTests(unittest.TestCase):
                 helper = update.HELPER.replace('$changed = $false',
                     '$changed = $false\n'
                     "function Get-FileHash { throw 'Get-FileHash unavailable in runner simulation' }")
+                helper = helper.replace('$process = [Diagnostics.Process]::Start($start)',
+                    "if ($env:PYINSTALLER_RESET_ENVIRONMENT -ne '1') { throw 'Restart environment not reset' }\n"
+                    '    $process = [Diagnostics.Process]::Start($start)')
                 script.write_text(helper, encoding='utf-8-sig')
                 conf.write_text(json.dumps(config), encoding='utf-8')
                 process = subprocess.Popen([str(powershell), '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
                                             '-File', str(script), '-Config', str(conf)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                                           env=dict(os.environ, PSModulePath=str(folder / 'missing-modules')))
+                                           env=dict(os.environ, PSModulePath=str(folder / 'missing-modules'),
+                                                    PYINSTALLER_RESET_ENVIRONMENT='0'))
                 try:
                     deadline = time.monotonic() + 15
                     while not Path(config['ready']).exists() and process.poll() is None and time.monotonic() < deadline:
