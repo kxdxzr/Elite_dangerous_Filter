@@ -172,7 +172,7 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         row.v_class.set('')
         row.v_rating.set('')
         row._refresh_spec_options()
-        self.assertEqual(tuple(row.cb_spec['values']), ('不限', '2C', '3B', '4A'))
+        self.assertEqual(tuple(row.cb_spec['values']), ('不限', '2C（固定）', '3B（固定）', '4A（固定）'))
         row.v_spec.set('2C')
         module = win.criteria()[0].conditions[0]
         self.assertEqual((module['class'], module['rating']), ([2], ['C']))
@@ -184,6 +184,39 @@ class EngineerShoppingGuiTests(unittest.TestCase):
         self.assertEqual(restored.purchase_row.v_spec.get(), '2 unfinished')
         with self.assertRaises(ValueError):
             restored.criteria()
+
+    def test_weapon_mount_labels_keep_raw_specs_language_and_session(self):
+        win = self.app.engineer_shopping_window()
+        self.populate(win)
+        row = win.purchase_row
+        row.val.set('Beam Laser')
+        row._refresh_spec_options()
+        self.assertIn('2D（固定）', row.cb_spec['values'])
+        self.assertIn('2D（万向）', row.cb_spec['values'])
+        self.assertNotIn('2D（固定／万向）', row.cb_spec['values'])
+        row.cb_spec._display.set('2D（万向）')
+        self.assertEqual(row.v_spec.get(), '2D|Gimballed')
+        before = win.criteria()
+        self.assertEqual((before[0].conditions[0]['class'], before[0].conditions[0]['rating']), ([2], ['D']))
+        self.assertEqual(before[0].conditions[0]['weapon_mode'], 'Gimballed')
+        self.app.set_language('en')
+        self.assertEqual(row.cb_spec._display.get(), '2D (Gimballed)')
+        self.assertIn('2E (Turreted)', row.cb_spec['values'])
+        self.assertEqual(win.criteria(), before)
+        saved = self.app._state_dict()['tools']['engineer_shopping']
+        self.assertEqual(row.editor_state()['module_spec'], '2D|Gimballed')
+        win.destroy()
+        self.app._tool_states['engineer_shopping'] = saved
+        restored = self.app.engineer_shopping_window()
+        self.assertEqual(restored.purchase_row.v_spec.get(), '2D|Gimballed')
+        self.assertEqual(restored.purchase_row.cb_spec._display.get(), '2D (Gimballed)')
+        self.assertEqual(restored.criteria(), before)
+        row = restored.purchase_row
+        row.val.set('Fuel Scoop')
+        row._refresh_spec_options()
+        self.assertEqual(row.cb_spec._value_labels, {})
+        self.assertIn('5A', row.cb_spec['values'])
+        self.assertNotIn('5A (Fixed)', row.cb_spec['values'])
 
     def test_search_separate_columns_csv_and_edited_form_keeps_result_snapshot(self):
         import engineer_shopping as tool

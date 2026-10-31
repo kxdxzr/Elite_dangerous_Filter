@@ -13,6 +13,30 @@ _locks = [threading.Lock() for _ in range(32)]
 _guard = threading.Lock()
 
 
+def peek(key, ttl):
+    """Read a fresh successful entry without invoking a loader."""
+    with _guard:
+        record = _memory.get(key)
+    if record is None:
+        record = session_store.load(data_file('pve_cache_' + hashlib.sha256(key.encode()).hexdigest()[:24] + '.json'))
+    stamp = record.get('fetched_at') if isinstance(record, dict) else None
+    age = time.time() - stamp if type(stamp) in (int, float) and math.isfinite(stamp) else ttl + 1
+    if isinstance(record, dict) and record.get('version') == 1 and 0 <= age < ttl and 'value' in record:
+        _remember(key, record)
+        return True, record['value']
+    return False, None
+
+
+def put(key, value, fetched_at=None):
+    """Publish only fully verified successful responses; persistence is best effort."""
+    record = dict(version=1, fetched_at=time.time() if fetched_at is None else fetched_at, value=value)
+    try:
+        session_store.save(data_file('pve_cache_' + hashlib.sha256(key.encode()).hexdigest()[:24] + '.json'), record)
+    except OSError:
+        pass
+    _remember(key, record)
+
+
 def cached(key, loader, ttl, force=False):
     lock = _locks[hash(key) % len(_locks)]
     with lock:

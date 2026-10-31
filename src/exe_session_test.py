@@ -34,7 +34,7 @@ SHOPPING_ROWS = [
             'module_slot': '通用插槽', 'condition_category': '不限', 'module_spec': '0A'}),
     dict(type='field', field='modules', op='属于其一', value='Plasma Accelerator',
          **{'class': '2', 'rating': 'C', 'fresh': '不限', 'discount': '不限',
-            'module_slot': '武器挂点', 'condition_category': '不限', 'module_spec': '2C'}),
+            'module_slot': '武器挂点', 'condition_category': '不限', 'module_spec': '2C|Fixed'}),
 ]
 TOOLS['engineer_shopping'] = dict(
     pledged_power='Jerome Archer',
@@ -86,6 +86,7 @@ def run(gui, phase, report_path):
                    'full_outfitting': app.full_outfitting_window()}
         assert len(windows['engineer_shopping'].purchase_rows) == 2
         assert [c['values'] for c in windows['engineer_shopping'].criteria()[0].conditions[:2]] == [['Shield Booster'], ['Plasma Accelerator']]
+        assert windows['engineer_shopping'].criteria()[0].conditions[1]['weapon_mode'] == 'Fixed'
         for window in root.winfo_children():
             if isinstance(window, gui.tk.Toplevel):
                 if getattr(window, "_raw_title", "") == "航母车位查找":

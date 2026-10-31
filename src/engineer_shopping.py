@@ -191,18 +191,18 @@ def export_table(result, language, tr):
 
     headers, records = station_table(result['rows'] if result else [], 'stations',
                                      result['conditions'] if result else [], language, tr)
-    headers.append('Confirmed landing pad' if language == 'en' else '已确认停机坪')
+    headers.append(tr('已确认停机坪'))
     for row, record in zip(result['rows'] if result else [], records):
         record.append(confirmed_pad(row) or tr('情况未知'))
-    columns = (('direct_jumps', '直达估算跳数', 'Estimated direct jumps'),
-               ('origin_jumps', '到采购点估算跳数', 'Estimated jumps to shop'),
-               ('destination_jumps', '到工程师估算跳数', 'Estimated jumps to engineer'),
-               ('total_jumps', '经采购点估算总跳数', 'Estimated total jumps via shop'),
-               ('extra_jumps', '额外估算跳数', 'Estimated extra jumps'),
-               ('detour_ly', '绕行距离 ly', 'Detour distance ly'))
-    headers.extend(en if language == 'en' else zh for _, zh, en in columns)
+    columns = (('direct_jumps', '直达估算跳数'),
+               ('origin_jumps', '到采购点估算跳数'),
+               ('destination_jumps', '到工程师估算跳数'),
+               ('total_jumps', '经采购点估算总跳数'),
+               ('extra_jumps', '额外估算跳数'),
+               ('detour_ly', '绕行距离 ly'))
+    headers.extend(tr(label) for _, label in columns)
     for row, record in zip(result['rows'] if result else [], records):
         metrics = row.get('_shopping_route', {})
         record.extend((format_ly(metrics[key]) if key == 'detour_ly' else str(metrics[key]))
-                      if key in metrics else tr('情况未知') for key, _, _ in columns)
+                      if key in metrics else tr('情况未知') for key, _ in columns)
     return headers, records

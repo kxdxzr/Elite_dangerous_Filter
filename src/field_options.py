@@ -53,9 +53,12 @@ def _save_disk(d):
 
 
 def _http_json(url, timeout=30):
+    import request_control
     req = urllib.request.Request(url, headers={"User-Agent": "elite-filter/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode("utf-8"))
+    def operation():
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8"))
+    return request_control.request(url, operation)
 
 
 def _norm_values(d):

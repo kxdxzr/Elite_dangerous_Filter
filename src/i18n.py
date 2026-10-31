@@ -1,668 +1,36 @@
-"""Presentation-only localization. Canonical query/session values never change language."""
+"""Presentation-only localization; query values and game identifiers stay canonical."""
+from importlib import import_module
 import re
 
-CATALOG = {
-    '首次扫描需要建立缓存，因此会很慢；缓存完成后，后续查询会更快。': 'The first scan builds the cache and will be very slow. Subsequent searches will be faster once caching is complete.',
-    '缓存于（{days}）天之前': 'Cached {days} days ago',
-    '暂无缓存': 'No cached data',
-    '正在读取缓存时间…': 'Reading cache time…',
-    '缓存时间无效，请更新数据': 'Invalid cache time; please update data',
-    '首次及手动更新固定扫描Sol周围20,000 ly的最宽松站点名单；再按表单筛选。换星系只查询坐标并重算距离，不重扫库存。': 'Initial and manual updates scan the widest station shortlist within 20,000 ly of Sol, then apply your filters. Changing reference only looks up coordinates and recalculates distances, not stock.',
-    '主要适用于Bubble（人类核心居住区）；远离Bubble后，现有站点名单可能不再适用或没有结果。换参考星系只重算距离，不会自动发现当地站点。': 'Primarily intended for the Bubble (core human-inhabited space). Far outside it, the saved station shortlist may no longer be useful or return results. Changing reference only recalculates distances; it does not discover local stations.',
-    '首次保存最宽松站点名单；换星系只查询坐标并重算距离，改半径不重扫库存。手动更新才刷新名单及库存。': 'Save the widest station shortlist once. Changing reference looks up coordinates and recalculates distances; changing radius does not rescan stock. Only manual updates refresh the shortlist and stock.',
-    '仅查询星系坐标…': 'Looking up system coordinates only…',
-    '已有站点名单筛选完成': 'Saved station shortlist filtered',
-    '仅筛选已有站点名单，换星系只重算距离；扩大半径不代表发现新范围内全部站点。': 'Filtering the saved station shortlist only; changing reference recalculates distances. Increasing radius does not discover every station in the new area.',
-    '库存快照范围': 'Inventory snapshot scope',
-    '快照更新页数上限': 'Snapshot update page limit',
-    '已安装装备清单（更新数据后应用）': 'Installed catalogue (applies after updating stock data)',
-    '更新数据并查询': 'Update data and search',
-    '库存快照时间': 'Inventory snapshot time',
-    '首次建立最宽松库存快照；此后查询仅本地筛选，手动更新才联网。最多页数仅用于更新，最多结果仅限制显示。': 'Build the widest inventory snapshot once; subsequent searches filter locally until a manual update. Page limit applies to updates; result limit applies only to display.',
-    '正在建立最宽松库存快照…': 'Building widest inventory snapshot…',
-    '本地快照筛选完成': 'Local snapshot filtering complete',
-    '本地库存筛选': 'Local inventory filtering',
-    '本地库存快照筛选，不代表实时库存；手动更新数据后才重新联网。': 'Filtering a local stock snapshot, not live inventory; only manual data updates reconnect.',
-    '检索半径 ly': 'Search radius ly',
-    '最多结果': 'Maximum results',
-    '最多页数': 'Maximum pages',
-    '未记录检索条件': 'Search conditions were not recorded',
-    '未记录': 'Not recorded',
-    '包含其他全配件公共折扣站': 'Include other all-module public discount stations',
-    '同站Guardian科技经纪人': 'Guardian technology broker at the same station',
-    '不适用（未要求折扣）': 'Not applicable (discounts not required)',
-    '同站通用无人机控制器7A及7C齐全（默认关闭）': 'Require both 7A and 7C Universal Multi Limpet Controllers (off by default)',
-    '通用无人机控制器条件': 'Universal limpet controller requirement',
-    '要求通用无人机控制器7A及7C': 'Both 7A and 7C Universal controllers required',
-    '不要求通用无人机控制器7A及7C': '7A/7C Universal controllers not required',
-    '通用无人机控制器目录不完整，无法确认齐全': 'Universal limpet controller catalogue incomplete; completeness cannot be verified',
-    'Spansh未提供': 'Not provided by Spansh',
-    '正在补全结果资料…': 'Completing result metadata…',
-    '公共加价': 'Public markup',
-    '全配件公共加价': 'Public markup on all required modules',
-    '目录规则版本': 'Catalogue rule version',
-    '目录事实来源': 'Catalogue fact sources',
-    '内置目录': 'Original catalogue',
-    '当前装备清单': 'Current equipment catalogue',
-    '本地更新清单无效，查询时回退原目录': 'Invalid local update; searches will use the original catalogue',
-    '检查装备清单更新': 'Check catalogue updates',
-    '回退装备清单': 'Roll back catalogue',
-    '正在更新装备清单…': 'Updating equipment catalogue…',
-    '装备清单': 'Equipment catalogue',
-    '装备清单更新失败，保留原版本': 'Catalogue update failed; previous version retained',
-    'GitHub尚未发布装备清单': 'No equipment catalogue release published on GitHub yet',
-    '装备清单已是最新版本': 'Equipment catalogue is up to date',
-    '下载并应用装备清单？': 'Download and apply this equipment catalogue?',
-    '已取消清单更新': 'Catalogue update cancelled',
-    '装备清单已更新，下次查询生效': 'Catalogue changed; applies to the next search',
-    '同站AX装备规格齐全（含武器及支援设备，默认关闭）': 'Require all AX equipment variants (weapons and support equipment; off by default)',
-    '普通／Power须全实际规格，AX装备单独可选；默认已有购买资格。Merc装备不推定代币折扣。': 'All ordinary/Power variants required; AX equipment is optional. Purchase eligibility assumed. No token discounts inferred for Merc equipment.',
-    'AX装备条件': 'AX equipment requirement',
-    'AX装备规格齐全': 'All AX equipment variants required',
-    '不要求AX装备': 'AX equipment not required',
-    'AX装备目录不完整，无法确认齐全': 'AX equipment catalogue incomplete; completeness cannot be verified',
-    '必须全部已选必需配件都有公共折扣（默认关闭）': 'Require public discounts on every selected required module (off by default)',
-    '普通／Power须全实际规格，AX武器单独可选；默认已有购买资格。Merc装备不推定代币折扣。': 'All ordinary/Power variants required; AX weapons are optional. Purchase eligibility assumed. No token discounts inferred for Merc equipment.',
-    '同站AX武器规格齐全（含增强型，默认关闭）': 'Require all AX weapon variants at the same station (including enhanced; off by default)',
-    'AX武器条件': 'AX weapon requirement',
-    'AX武器规格齐全': 'All AX weapon variants required',
-    '不要求AX武器': 'AX weapons not required',
-    'AX武器目录不完整，无法确认齐全': 'AX weapon catalogue incomplete; completeness cannot be verified',
-    '正在补查折扣背景…': 'Checking discount context…',
-    '优惠资料复核': 'Discount evidence check',
-    '已按数字ID区分的共享符号组': 'Shared symbols already distinguished by numeric ID',
-    '未启用折扣筛选': 'Discount filtering is disabled',
-    '必须全部普通／Power配件都有公共折扣（默认关闭）': 'Require public discounts on every ordinary/Power module (off by default)',
-    '默认不要求折扣；启用后默认LYR 15%，可包含其他公共优惠。始终排除航母及要塞航母。':
-        'Discounts are optional. When required: LYR 15% by default, optionally other public discounts. All carriers, including Stronghold Carriers, are excluded.',
-    '普通／Power须全实际规格，默认已有购买资格；Merc Coins仅可选库存检查，不推定代币折扣。':
-        'All actual ordinary/Power variants are required; eligibility is assumed. Merc Coins equipment is optional stock-only, with no token discount assumed.',
-    '全部配件商店': 'All outfitters',
-    '仅待身份复核（其他要求均满足）': 'Identity check only (all other requirements met)',
-    '仅待身份复核': 'Identity check only',
-    '库存未齐或未收录': 'Inventory incomplete or unreported',
-    '其他条件未满足或无法确认': 'Other requirements not met or unconfirmed',
-    '库存复核': 'Inventory verification',
-    '已知优惠范围': 'Known discount coverage',
-    '全配件有已知优惠': 'Known discounts on all required modules',
-    '部分配件有已知优惠': 'Known discounts on some modules only',
-    '未确认公共折扣': 'Public discount unconfirmed',
-    '折扣要求': 'Discount requirement',
-    '必须全配件公共折扣': 'Public discounts required on every module',
-    '不要求折扣': 'Discounts not required',
-    '目录按数字物品ID去重，不要求工程师专售规格及限定科技配件。':
-        'Catalogue entries are deduplicated by numeric item ID; workshop-only variants and restricted technology stock are excluded.',
-    '物品ID目录版本': 'Item ID catalogue revision',
-    '第二来源未提供库存时间，合并核验不代表现场实时库存。':
-        'The second source supplies no inventory timestamp; combined verification is not a guarantee of live stock.',
-    '库存核验来源': 'Inventory verification sources',
-    'EDSM（未提供库存时间）': 'EDSM (inventory timestamp not supplied)',
-    '正在用第二来源复核库存…': 'Cross-checking inventory with a second source…',
-    '配件身份目录响应过大': 'Module identity catalogue response is too large',
-    '配件身份目录无效': 'Invalid module identity catalogue',
-    '缺少可复核的站点市场编号': 'No verifiable station market ID',
-    '第二来源站点身份不匹配': 'Second-source station identity does not match',
-    '特殊装备条件': 'Special-equipment requirement',
-    'Merc Coins 特殊装备齐全（仅库存）': 'All Merc Coins special equipment (stock only)',
-    '不要求特殊装备': 'Special equipment not required',
-    '额外要求 Merc Coins 特殊装备齐全（默认不要求）': 'Also require all Merc Coins special equipment (off by default)',
-    '普通／Power 配件须齐全且有公共折扣，默认已有购买资格；特殊装备仅核验库存，不推定代币折扣。':
-        'Ordinary/Power modules require full stock and public discounts; eligibility is assumed. Special equipment is stock-only; no token discount is assumed.',
-    '特殊装备目录不完整，无法确认齐全': 'Special-equipment catalogue is incomplete; full coverage cannot be confirmed',
-    '正在核验特殊装备目录…': 'Checking special-equipment catalogue…',
-    '正在核验创世参照站…': 'Checking Jameson reference station…',
-    '创世参照（独立于筛选结果）': 'Jameson reference (separate from search hits)',
-    '尚未查询；参照站不计入范围命中': 'Not queried; reference does not count as a search hit',
-    '参照数据不可用': 'Reference data unavailable',
-    '参照站数据未返回': 'Reference station data not returned',
-    '符合折扣来源及半径': 'Within discount-source and radius scope',
-    '不符合当前折扣来源或半径': 'Outside the selected discount-source or radius scope',
-    '参照不等于通过全部库存条件': 'Reference does not imply all stock requirements are met',
-    '部分结果': 'Partial results',
-    '检索完整性': 'Search completeness',
-    '候选分页已取完': 'Candidate pagination exhausted',
-    '未确认全配件公共折扣': 'Public all-module discount not confirmed',
-    '请求暂时失败，重试一次…': 'Request temporarily failed; retrying once…',
-    '检索未完成，已保留通过核验的部分结果': 'Search incomplete; verified partial results retained',
-    '达到单来源10000条安全分页上限，请缩小检索半径': 'Reached the 10,000-candidate safety limit for this source; reduce the radius',
-    '未收录规格（不代表确认缺货）': 'Unreported variants (not confirmed out of stock)',
-    '名称或规格冲突，无法确认': 'Name/specification conflict; cannot confirm',
-    '同编号身份冲突不等于缺货，也不能证明齐全': 'Shared-symbol identity conflicts mean neither confirmed absence nor full coverage',
-    '含身份冲突的候选': 'Candidates with identity conflicts',
-    '检索未完成，仅导出已核验的部分结果？': 'Search is incomplete. Export verified partial results only?',
-    '舰船条件': 'Ship requirements',
-    '目录事实版本': 'Catalogue facts revision', '目录核验时间': 'Catalogue checked at',
-    '购买资格假设': 'Purchase eligibility assumption',
-    '默认已有全部 Power 配件购买资格': 'All Power-module purchase eligibility assumed',
-    '查找满配件空间站': 'Find fully outfitted stations',
-    '附加条件': 'Additional requirements',
-    '全部非势力船（含联盟）': 'All non-rank-faction ships (including Alliance)',
-    '全部联邦船': 'All Federal ships',
-    '全部帝国船': 'All Imperial ships',
-    '同站 Guardian 科技经纪人': 'Guardian technology broker at the same station',
-    '包含其他全配件公共折扣站（如 Jameson Memorial）': 'Include other public all-module discounts (e.g. Jameson Memorial)',
-    '默认 LYR 15%：仅 Fortified／Stronghold 普通站点，排除全部航母（含要塞航母）。':
-        'Default: LYR 15%, ordinary stations in Fortified / Stronghold systems only. Excludes all carriers, including Stronghold Carriers.',
-    '普通及 Power 配件要求全部已知实际规格；默认已有购买资格，不计个人武器优惠。':
-        'Requires all known actual variants of ordinary and Power modules. Purchase eligibility is assumed; personal weapon bonuses are not counted.',
-    '舰船勾选同时检查对应船体装甲，不要求舰船折扣。库存及目录非实时，缺失数据不能证明齐全。':
-        'Ship selections also require their hull armour, but not ship discounts. Stock/catalogue data are not live; missing evidence cannot prove completeness.',
-    '已知规格覆盖': 'Known variant coverage', '公共折扣': 'Public discount',
-    'Guardian 科技经纪人': 'Guardian technology broker',
-    '配件库存更新时间': 'Outfitting updated',
-    '刷新目录并查询': 'Refresh catalogue and search',
-    '正在核验配件规格目录…': 'Checking module catalogue…',
-    '配件规格目录不完整，无法确认齐全': 'Module catalogue is incomplete; full coverage cannot be confirmed',
-    '舰船目录不完整': 'Ship catalogue is incomplete',
-    '舰船库存不齐或未知': 'Ship stock is incomplete or unknown',
-    '船体装甲目录不完整': 'Hull armour catalogue is incomplete',
-    '配件库存未知': 'Module stock is unknown',
-    '排除航母或站点类型未知': 'Carrier excluded, or unknown station type',
-    '未确认 LYR 15%公共折扣': 'LYR 15% public discount not confirmed',
-    '未确认同站 Guardian 科技经纪人': 'Guardian technology broker at this station not confirmed',
-    '按已知规格目录逐项核验，不保证实时库存；默认已有全部 Power 配件购买资格。':
-        'Checked against known catalogue variants, not guaranteed live stock. All Power-module purchase eligibility is assumed.',
-    '请填写参考星系和正数检索半径': 'Enter a reference system and a positive search radius',
-    '缺失规格': 'Missing variants', '未确认折扣': 'Unconfirmed discounts',
-    '配件目录响应过大': 'Module catalogue response is too large',
-    '请填参考星系、有效半径和页数；最多航母数为非负整数或留空':
-        'Enter a reference system, valid radius and page limit; maximum carriers must be a non-negative integer or blank',
-    'Arissa Lavigny-Duval（战斗武器最高30%）': 'Arissa Lavigny-Duval (combat weapons up to 30%)',
-    'Denton Patreus（战斗武器最高40%）': 'Denton Patreus (combat weapons up to 40%)',
-    'Jerome Archer（战斗武器最高30%）': 'Jerome Archer (combat weapons up to 30%)',
-    'Yuri Grom（战斗武器最高30%）': 'Yuri Grom (combat weapons up to 30%)',
-    '无': 'None',
-    '候选星系': 'Candidate systems',
-    '任务来源控制派系：': 'Mission source controlling factions: ',
-    '补查已知任务来源的控制派系…': 'Looking up controlling factions of known mission sources…',
-    'RES 类型（任务派系数为0时）': 'RES type (minimum mission factions = 0)',
-    '补充的 RES 星系按目标距离、目标控制小派系筛选；有已知任务来源的优先，未收录显示无数据。':
-        'Additional RES systems use target distance and controlling faction; known mission sources rank first, unlisted sources show No data.',
-    '最少任务派系数为0：保留任务结果并补充 RES 星系；1–8：仅检索海盗任务。0时来源条件停用但保留。':
-        'Minimum mission factions 0: retain mission results and add RES systems; 1–8: missions only. At 0, source filters are disabled but retained.',
-    '最少任务派系数为0：检索 RES 星系；1–8：检索海盗任务。0时不要求任务来源，来源条件停用但保留。':
-        'Minimum mission factions 0: search RES systems; 1–8: search massacre missions. At 0, mission sources are optional and source filters are disabled but retained.',
-    'RES 星系分页：': 'RES system pages: ',
-    '检索模式': 'Search mode', '海盗任务': 'Massacre missions', 'RES 星系': 'RES systems',
-    'RES 类型（星系模式）': 'RES type (system mode)',
-    '任意 RES（允许星环推定）': 'Any RES (allow ring inference)',
-    '仅明确 RES': 'Confirmed RES only', '仅 Low RES': 'Low RES only',
-    '仅普通 RES': 'Regular RES only', '仅 High RES': 'High RES only', '仅 Haz RES': 'Haz RES only',
-    '无数据': 'No data',
-    '查询符合条件的 RES 候选星系…': 'Finding matching RES candidate systems…',
-    '复核 RES 候选星系的星环…': 'Checking rings in RES candidate systems…',
-    'RES 星系模式：不要求任务来源；有已知任务来源的优先，无记录显示无数据。':
-        'RES system mode: mission sources are optional; known sources rank first, unlisted sources show No data.',
-    '有环仅推定 RES；Low／普通／High／Haz 必须有明确地点记录。':
-        'Rings only infer RES; Low / Regular / High / Haz require explicit site records.',
-    'RES 星系模式：半径针对 RES 所在星系；按目标控制小派系筛选，不要求任务。有已知任务来源的优先；未收录显示无数据。':
-        'RES system mode: radius applies to the RES system; filter by target controlling faction, no missions required. Known mission sources rank first; unlisted sources show No data.',
-    '未知目标自动用 Spansh 天体数据复核星环（距离留空也复核）；未查到星环则排除，查询失败或数据不完整仍为未知。':
-        'Unknown targets are checked against Spansh body data even without a distance limit. No rings in returned body data means exclusion; failed or incomplete lookups remain Unknown.',
-    '用 Spansh 复核未知目标星环…': 'Checking unknown targets for rings with Spansh…',
-    '候选地点不保证实时任务。配对与 RES/CNB 数据来自 EDTools；非无政府小派系数量仅估计可能发任务的派系。星环视为推定 RES，不推定 Low；明确无环视为无 RES，CNB 独立判断；数据缺失仍为情况未知。请在游戏中确认 BGS、声望和任务。':
-        'Candidates do not guarantee live missions. EDTools supplies pairs and RES/CNB records; non-Anarchy counts estimate potential issuers. Rings imply RES, not Low; confirmed ring-free systems have no RES, while CNB is independent. Missing data remains Unknown. Verify BGS, reputation and missions in game.',
-    '个人优惠仅支持采购模组／舰载武器': 'Personal bonuses only support module / ship weapon purchases.',
-    '个人优惠按满级假设计算，未核验实际等级或结算价。':
-        'Personal bonuses assume maximum rank; actual rank and checkout prices are not verified.',
-    '效忠 Power（个人优惠）': 'Pledged Power (personal bonus)',
-    '按满级个人优惠计算（默认）': 'Assume maximum-rank personal bonus (default)',
-    '满级优惠选项须为布尔值': 'The maximum-rank bonus option must be a boolean.',
-    '选择效忠 Power 后假设已解锁最高等级奖励，未读取实际等级；仅限本势力领地内适用武器，不与公共优惠相加，航母不计入。':
-        'Selecting a pledged Power assumes maximum-rank rewards are unlocked; actual rank is not read. Eligible weapons in that Power\'s territory only; no stacking with public discounts or carrier discounts.',
-    'Archer 公共折扣因已报告的游戏 Bug 不计入；个人等级优惠另算':
-        'Archer public discount excluded due to a reported game bug; personal rank bonus handled separately',
-    'Mahon：普通货架／船体增强优惠保留；Guardian HRP／SRP 因已报告的游戏 Bug 不计入':
-        'Mahon: standard Cargo Rack / HRP discounts retained; Guardian HRP / SRP excluded due to a reported game bug',
-    'Archer 势力折扣因已报告的游戏 Bug 不计入': 'Archer Power discount excluded due to a reported game bug',
-    '采购站停机坪（可停靠船型）': 'Shopping pad (ship size)',
-    '停机坪请选择不限、S、M或L': 'Select Any, S, M or L for the landing pad.',
-    '已确认停机坪': 'Confirmed landing pad',
-    '外观': 'Appearance', '跟随系统': 'Follow system', '浅色': 'Light', '深色': 'Dark',
-    '星系、空间站与顺路工具': 'Systems, stations and tools for your journey',
-    '查询': 'Search', '复制站名': 'Copy station name', '关闭': 'Close',
-    '是否打折': 'Discounted',
-    '规格': 'Specification',
-    '添加采购项': 'Add shopping item', '删除采购项': 'Remove shopping item',
-    '请至少添加一项采购模组／舰载武器': 'Add at least one module / ship weapon to the shopping list.',
-    '同一站点须同时满足全部采购项；同一行多选名称也要求全部有货。':
-        'One station must satisfy every shopping item; multiple names within a row must all be stocked too.',
-    '每项独立选择规格、折扣和新鲜度；到站距离留空不限，不核实购买数量。':
-        'Each item has its own specification, discount and freshness. Blank arrival distance is unrestricted; purchase quantities are not verified.',
-    '未确认此规格，可手填查询': 'Unconfirmed specification; manual search allowed.',
-    '规格请填写如 2C、5A，或选择不限': 'Enter a specification such as 2C or 5A, or select Any.',
-    '槽位类型': 'Slot type', '核心内部': 'Core internal', '可选内部': 'Optional internal',
-    '武器挂点': 'Weapon hardpoints', '通用插槽': 'Utility mounts', '其他／未分类': 'Other / Unclassified',
-    '基本信息': 'Basic information', '位置距离': 'Location and distance', '经济人口': 'Economy and population',
-    '条件分类': 'Condition group',
-    '工程师途中采购': 'Engineer trip shopping', '行程与航程': 'Trip and jump range',
-    '忽略航母': 'Ignore fleet carriers',
-    '忽略地面站': 'Ignore planetary stations',
-    '目标工程师／星系': 'Engineer / system',
-    '最多额外跳数（估算）': 'Max extra jumps (estimated)',
-    '最多额外跳数须为非负整数': 'Maximum extra jumps must be a non-negative integer.',
-    '星系坐标无效': 'Invalid system coordinates.', '航程或额外跳数过大': 'Jump range or extra-jump limit is too large.',
-    '采购模组／舰载武器': 'Modules / ship weapons to buy',
-    '请选择要采购的模组／舰载武器': 'Select the modules / ship weapons to buy.',
-    '前往工程师途中，寻找少绕路的模组／舰载武器售卖点，可筛选已知折扣。':
-        'Find module / ship-weapon retailers with short detours on your engineer trip, optionally requiring known discounts.',
-    '自动覆盖单跳和多跳；额外跳数相对直达估算。未验证实际航线，排序仅针对已取回的命中。':
-        'Single- and multi-jump trips are handled automatically. Extra jumps are estimated against a direct trip. Routes are unverified; only fetched matches are ranked.',
-    '跳数仅按距离估算，未验证实际航线；排序仅针对已取回的命中。':
-        'Jumps are distance-only estimates, not verified routes; only fetched matches are ranked.',
-    '请从列表选择目标舰船工程师': 'Select a ship engineer from the list.',
-    '出发星系': 'Departure system', '工程师星系': 'Engineer system',
-    '单跳航程 ly': 'Jump range ly', '到站距离小于 ls': 'Arrival distance below ls',
-    '采购模组／武器': 'Modules / weapons to buy',
-    '请填写出发星系和工程师星系': 'Enter the departure and engineer systems.',
-    '航程须为正数，到站距离须为非负数或留空':
-        'Jump range must be positive; arrival distance must be non-negative or blank.',
-    '请选择要采购的模组／武器': 'Select the modules / weapons to buy.',
-    '势力派系': 'Powers and factions', '站点设施': 'Station facilities',
-    '商品与舰船模组': 'Goods, ships and modules', '天体信息': 'Body information', '航母信息': 'Fleet carriers',
-    '殖民状态': 'Colonisation status', '数量统计': 'Counts', '异族战争': 'Thargoid war', '数据时间': 'Data timestamps',
-    '折扣按势力／地点已知规则核对同件商品；未确认规则不命中，不含个人优惠':
-        'Discounts use known Power/location rules for the same item; unconfirmed rules do not match. Personal bonuses excluded.',
-    '仅显示顺路中子星辅助目标（实验性功能）': 'Only aligned neutron-assisted targets (Experimental)',
-    '去程参考中子星': 'Outbound reference neutron star', '返程参考中子星': 'Return reference neutron star',
-    '顺路条件逐势力放宽：30°／10% → 45°／25% → 60°／50%，有结果即停；40／50 ly仅作内部参考，不用于排除候选，不保证实际省跳。':
-        'Relax alignment per Power: 30deg/10% -> 45deg/25% -> 60deg/50%, stop at first match. The 40/50 ly model is an internal hint only, not an exclusion rule or guarantee of jump savings.',
-    '中子辅助目标查找为实验性功能。顺路几何条件决定命中：逐势力30°／10% → 45°／25% → 60°／50%，有结果即停，投影不越过目标。40／50 ly模型仅作内部参考，不因模型未省跳而排除候选。仅使用来源200 ly内、到达距离≤100 Ls的中子星；未验证实际中转星或燃油，不保证实际省跳或全势力有结果。':
-        'Experimental neutron-assisted target finder. Geometry determines eligibility: per-Power tiers 30deg/10%,45deg/25%,60deg/50%, stopping at first match, projection within trip. The 40/50 ly model is an internal hint; zero estimated savings do not exclude a candidate. Anchors within 200 ly of source and arrival <=100 Ls only. Transfer stars and fuel unverified; savings and full Power coverage are not guaranteed.',
-    '仅使用来源200 ly内、到达距离≤100 Ls的中子星；不验证中转星或燃油，不保证全势力有结果。':
-        'Only neutron stars within 200 ly of source and arrival <=100 Ls; transfer stars and fuel unverified. Results for every Power are not guaranteed.',
-    '优先顺路': 'Strict alignment', '适度绕行': 'Moderate detour', '宽松候选': 'Relaxed candidate',
-    '顺路筛选档位': 'Alignment tier',
-    '一次扫描逐势力放宽：30°／10% → 45°／25% → 60°／50%，有结果即停；投影不越过目标，同一中子星须通过40／50 ly模型核对省跳。实验性估算，不保证实际省跳。':
-        'One scan, relax per Power: 30deg/10% -> 45deg/25% -> 60deg/50%, stop at first matching tier. Projection within trip; same neutron star must pass 40/50 ly jump-savings model. Experimental, not guaranteed.',
-    '仅显示顺路且预计省跳的中子辅助目标（实验性功能）':
-        'Only aligned neutron-assisted targets with estimated jump savings (Experimental)',
-    '顺路条件：夹角≤30°、投影不越过目标、额外绕行≤10%；同一中子星再用40／50 ly模型核对往返省跳。仅为实验性估算，不保证实际省跳或距离更短。':
-        'Alignment: angle <=30 deg, projection within trip, detour <=10%; verify round-trip savings via the same neutron star at 40/50 ly. Experimental estimates, not guaranteed savings or shorter distance.',
-    '顺路中子星': 'Aligned neutron star', '方向夹角 °': 'Direction angle (deg)', '额外绕行 ly': 'Extra detour (ly)',
-    '中子省跳筛选为实验性功能。先筛顺路中子星：夹角≤30°、沿途投影不越过目标、额外绕行≤10%；再按去程40 ly／返程50 ly、4倍增压核对预计往返省跳。同一候选中子星须同时满足两项；仅用来源200 ly内、到达距离≤100 Ls的中子星。不验证普通中转星、燃油或时间，不保证实际省跳或缩短总距离。':
-        'Experimental neutron filtering: angle <=30 deg, projection within trip, detour <=10%; then verify estimated round-trip savings via that same star at 40/50 ly with 4x charging. Anchors within 200 ly of source and arrival <=100 Ls only. Transfer stars, fuel and time unverified; no guaranteed savings or shorter distance.',
-    '中子省跳筛选为实验性功能。': 'Neutron jump-savings filtering is experimental. ',
-    '仅显示中子往返预计省跳的目的地（实验性功能）':
-        'Only destinations with estimated neutron round-trip jump savings (Experimental)',
-    '每个势力最多显示5个星系，同星系只算一个结果；空间站仅供参考，保留最近的合格站点。双击明细复制星系名。':
-        'At most 5 systems per Power, one result per system; the nearest eligible station is a reference only. Double-click to copy the system name.',
-    '个不同星系': 'distinct systems', '条分组结果': 'grouped results',
-    '每势力最多5个星系': 'at most 5 systems per Power',
-    '去程40 ly／返程50 ly；来源200 ly内中子星；到达距离≤100 Ls':
-        '40 ly outbound / 50 ly return; neutron stars within 200 ly of source; arrival <=100 Ls',
-    '位置模型估算往返省跳；普通中转星、燃油与飞行时间未验证，不保证实际航线可行。目录加载失败标为未完成。':
-        'Position-based round-trip estimates; transfer stars, fuel and travel time are unverified, not a guaranteed itinerary. Catalogue failures mean incomplete results.',
-    '位置估算：去程40 ly、返程50 ly；仅用来源200 ly内、到达距离≤100 Ls的中子星，4倍增压。不验证普通中转星、燃油或飞行时间；省跳不是实际航线保证。':
-        'Position estimate: 40 ly outbound / 50 ly return; 4x neutron anchors within 200 ly of source, arrival <=100 Ls. Transfer stars, fuel and travel time are unverified; savings are not guaranteed.',
-    '加载来源200 ly内中子星': 'Loading neutron stars within 200 ly of source',
-    '预计节省跳数': 'Estimated jumps saved',
-    '去程增压中子星': 'Outbound neutron anchors',
-    '返程增压中子星': 'Return neutron anchors',
-    '仅显示中子往返预计省跳的目的地': 'Only destinations with estimated neutron round-trip jump savings',
-    '去程40 ly／返程50 ly；不使用配船；最多评估50个目的地':
-        '40 ly outbound / 50 ly return; no ship build; at most 50 destinations',
-    '中子筛选按往返总跳数比较普通直线理论下限，不核算燃油；未证明省跳的不显示，失败或达到评估上限标为未完成。':
-        'Compare estimated round-trip jumps against the ordinary straight-line lower bound, without fuel modelling. Unproven savings are hidden; failures or budget limits mean incomplete results.',
-    '固定跳距估算：去程40 ly、返程50 ly；不核算燃油。普通跳数为直线理论下限，不是实测路线；仅保留预计往返总跳数更少的目的地。':
-        'Fixed-range estimate: 40 ly outbound, 50 ly return; no fuel modelling. Ordinary jumps are a straight-line theoretical minimum, not a plotted route; keep only lower estimated neutron round-trip totals.',
-    '去程预计跳数': 'Estimated outbound jumps', '返程预计跳数': 'Estimated return jumps',
-    '普通往返理论最少跳数': 'Ordinary round-trip lower bound', '中子往返预计跳数': 'Estimated neutron round-trip jumps',
-    '预计至少少跳': 'Estimated minimum jumps saved', '中子往返评估': 'Neutron round-trip evaluation',
-    '中子筛选已启用；失败或未评估详情见检索说明。': 'Neutron filter enabled; see search notes for failures or unevaluated destinations.',
-    '中子筛选未完成，仅导出已确认符合条件的部分结果？': 'Neutron filtering is incomplete. Export confirmed matching partial results only?',
-    '已达到中子目的地评估上限': 'Neutron destination evaluation limit reached',
-    '缺少目的地星系名': 'Missing destination system name',
-    '中子路线无法评估或未评估': 'Neutron routes unavailable or unevaluated',
-    '个目的地；不代表不省跳': 'destinations; this does not establish no jump savings',
-    '已停止中子评估；仅保留已完成比较的目的地。': 'Neutron evaluation stopped; only completed destination comparisons are retained.',
-    '所选舰船与跳跃属性': 'Selected ship and jump attributes',
-    '船型': 'Ship type', '舰船名称': 'Ship name', '舰船编号': 'Ship ID',
-    '普通满油跳距': 'Normal full-tank range', '中子增压后跳距': 'Neutron-supercharged range',
-    '满油总质量 t': 'Full-tank total mass t', '主油箱 t': 'Main tank t',
-    '单跳最大燃油 t': 'Maximum fuel per jump t', 'FSD 最优质量 t': 'FSD optimal mass t',
-    '守护者增程 ly': 'Guardian boost ly', '无法计算跳跃属性': 'Cannot calculate jump attributes',
-    '正在读取跳跃属性…': 'Loading jump attributes…',
-    '理论单跳：主油箱与备用油箱满油，使用当前货物质量，不含注入；不代表当前位置可中子增压，实际路线受储备燃油等设置限制。':
-        'Theoretical single jump: full main/auxiliary tanks and current cargo, no injection. Neutron charging may not be available here; reserve fuel and other settings constrain the actual route.',
-    '中子星跳跃规划器': 'Neutron jump planner', '舰船配置收藏': 'Ship build favourites',
-    '新增舰船配置': 'Add ship build', '编辑舰船配置': 'Edit ship build',
-    '收藏名称': 'Favourite name', '保存舰船配置': 'Save ship build',
-    '重命名': 'Rename', '删除收藏': 'Delete favourite', '操作失败': 'Operation failed',
-    '导入 JSON 文件': 'Import JSON file', '覆盖同名舰船配置？': 'Replace the ship build with this name?',
-    '删除所选舰船配置？': 'Delete the selected ship build?',
-    '粘贴 Coriolis 配船 JSON 或 EDSY SLEF；不接受网页链接。': 'Paste Coriolis ship JSON or EDSY SLEF, not a website URL.',
-    '收藏仅保存在本地；开始规划后，舰船配置和航点将发送至 Spansh。首次解析需要联网获取 FSD 数据。':
-        'Favourites stay local. Planning sends the ship build and route points to Spansh. Initial parsing downloads FSD data.',
-    '起点星系': 'Start system', '终点星系': 'Destination system', '有序途经点': 'Ordered waypoints',
-    '添加途经点': 'Add waypoint', '删除途经点': 'Remove waypoint', '上移': 'Move up', '下移': 'Move down',
-    '货物 t': 'Cargo t', '储备燃油 t': 'Reserve fuel t', '注入策略': 'FSD injections', '规划算法': 'Routing algorithm',
-    '不使用': 'Never', '仅在需要时': 'When required', '始终使用': 'Always',
-    '优先少跳': 'Optimistic', '优先计算速度': 'Pessimistic',
-    '使用中子增压': 'Use supercharge', '第一段已增压': 'First leg already supercharged',
-    '排除副星': 'Exclude secondary stars', '遇可补油恒星即补油': 'Refuel every scoopable',
-    '本段起点按满油计算；途经点不保证能补油': 'Leg starts with an assumed full tank; waypoints may not offer refuelling',
-    '选择收藏舰船，填写起终点；途经点按列表顺序规划。': 'Select a ship build and enter endpoints. Waypoints are visited in list order.',
-    '序号': 'Step', '分段编号': 'Leg', '跳跃距离 ly': 'Jump distance ly', '距本段终点 ly': 'Distance to leg destination ly',
-    '本段到达剩余燃油 t': 'Arrival fuel remaining t', '本跳燃油 t': 'Jump fuel used t',
-    '需要补油': 'Must refuel', '中子星': 'Neutron star', '需要注入': 'Must inject', '途经点': 'Waypoint',
-    '出发分段': 'Departure leg', '假定出发燃油 t': 'Assumed departure fuel t', '分段出发假设': 'Departure assumption',
-    '请先选择舰船配置': 'Select a ship build first', '请填写起点和终点星系': 'Enter start and destination systems',
-    '多段航线确认': 'Confirm multi-leg route',
-    '每一段都按起点满油独立计算，不继承上一段剩余燃油或增压状态。途经点不保证能补油，请确认下一段出发前可以补满。继续？':
-        'Each leg assumes a full starting tank. Fuel and supercharge state do not carry over. Waypoints may not offer refuelling; confirm you can fill the tank before each leg. Continue?',
-    '正在提交联网航线规划…': 'Submitting online route planning…', '规划航线': 'Plan route',
-    '航线未完成，仅导出已完成分段？': 'Route incomplete. Export completed legs only?',
-    '航线分段': 'Route legs', '准备舰船参数与航点': 'Preparing ship parameters and route points',
-    '航线规划完成': 'Route planning complete',
-    '复制名称': 'Copy name', '复制空间站名': 'Copy station name',
-    '复制来源空间站': 'Copy source station',
-    '请先选择一条结果': 'Select a result first',
-    '所选结果没有可复制的信息': 'The selected result has no information to copy',
-    '最近有人星系': 'Nearest populated system',
-    '最近有人星系距离 ly': 'Nearest populated distance ly',
-    '最近有人星系最大停机坪': 'Nearest populated system max pad',
-    '复制最近有人星系': 'Copy nearest populated system',
-    '暂无最近有人星系信息': 'No nearest populated system information available',
-    '无固定停机坪': 'No fixed landing pads',
-    '目标结果': 'Requested results',
-    '候选核查': 'Candidate checks', '派系详情': 'Faction details', '天体批次': 'Body batches',
-    '星环批次': 'Ring batches', '站点复核': 'Station checks', '本页候选核查': 'Current-page checks',
-    '无更多星球': 'No more planets',
-    '扫描价值第1（星球／类型／Cr）': 'Scan value #1 (planet / type / Cr)',
-    '扫描价值第2（星球／类型／Cr）': 'Scan value #2 (planet / type / Cr)',
-    '扫描价值第3（星球／类型／Cr）': 'Scan value #3 (planet / type / Cr)',
-    '扫描价值数据完整性': 'Scan value coverage', '已记录天体完整': 'Recorded body values complete',
-    '数据不完整，仅列已知估值': 'Incomplete; known values only',
-    '+ 天体／最近有人条件': '+ Planet / nearest-populated conditions',
-    '天体／最近有人条件': 'Planet / nearest-populated conditions',
-    '编辑详细条件…': 'Edit detailed conditions…', '主界面星系详细条件': 'Main-window system details',
-    '仅用于星系查询': 'System queries only', '请先切换为星系查询': 'Switch to system queries first',
-    '天体／最近有人条件仅用于星系查询': 'Planet / nearest-populated conditions require system queries',
-    '星系派生数量仅用于星系查询': 'Derived system counts require system queries',
-    '派生数量条件需要数值操作': 'Derived counts require numeric operators',
-    '星系模式：数量用普通条件；天体组和最近有人距离用详细条件。':
-        'Systems: use field conditions for counts; detailed conditions for planet groups and verified nearest-populated distance.',
-    '详细条件与主界面其他行之间为 AND；此处不强制零人口、无站点或免许可。':
-        'Detailed conditions combine with other main-window rows using AND; no zero-population, station-free or permit-free restriction is imposed here.',
-    '最近有人星系距离（可选）': 'Nearest populated system distance (optional)',
-    '附近星系人口大于': 'Nearby system population greater than',
-    '距离上下限都留空则不启用；先查最近达标星系，再判断含边界的范围。普通距离行可同时限定搜索区域。':
-        'Leave both distance bounds blank to disable. Find the nearest qualifying system first, then check inclusive bounds. Ordinary distance rows can also limit the search region.',
-    '站点、航母和派系数量通过主界面的普通条件字段设置；任务派系数量为非无政府派系估计。':
-        'Use main-window field conditions for station, carrier and faction counts. Potential mission issuers are estimated from non-Anarchy factions.',
-    '正在复核星系详细条件…': 'Verifying detailed system conditions…',
-    '区域距离（可选）': 'Regional distance (optional)',
-    '最近人口 > 1 星系距离（可选）': 'Nearest population > 1 distance (optional)',
-    '最近有人星系最小 ly': 'Minimum distance ly', '最近有人星系最大 ly': 'Maximum distance ly',
-    '价值与查询数量': 'Value and query limits', '最近人口达标星系': 'Nearest qualifying populated system',
-    '最近星系人口': 'Nearest system population', '最近星系距离 ly': 'Nearest system distance ly',
-    '两套距离独立且同时启用时为 AND；最近距离先找最近人口达标星系，再判断上下限，包含边界。':
-        'The two distance filters are independent and combine with AND. Find the nearest qualifying populated system first, then check inclusive distance bounds.',
-    '殖民候选星系查找器': 'Colonisation candidate finder',
-    '区域参考星系（可选）': 'Regional reference (optional)',
-    '区域半径 ly（留空不限）': 'Regional radius ly (blank: any)',
-    '距人口 > 1 星系最大 ly（可选）': 'Max ly to population > 1 (optional)',
-    '星系价值大于（可选）': 'System value greater than (optional)',
-    '星系价值字段': 'System value field', '最大页数': 'Maximum pages', '最多结果': 'Maximum results',
-    '强制：零人口、无任何站点（含航母）、明确无需许可。可选数值留空不限，0 是实际阈值。':
-        'Required: zero population, no stations (including carriers), explicitly no permit requirement. Blank optional numbers mean unrestricted; 0 is a real threshold.',
-    'in 多选及 between 范围用 | 分隔；布尔值用 true / false。互绕按共同直接质心和相同周期推定，复杂／缺失关系为未知。':
-        'Use | for in choices and between bounds; booleans use true / false. Binary membership is inferred from a shared immediate barycentre and equal periods; complex/missing relationships are Unknown.',
-    '星球条件': 'Planet conditions', '独立星环条件': 'Independent ring conditions',
-    '条件组之间': 'Between groups', '条件组': 'Condition group',
-    'AND：全部存在；OR：任一存在。组内条件由同一天体／星环同时满足。':
-        'AND: all groups exist; OR: any group exists. Conditions within a group must match the same body/ring.',
-    '添加条件组': 'Add group', '添加条件': 'Add condition', '删除组': 'Delete group', '删除条件': 'Delete condition',
-    '可选条件留空不限；查询只覆盖第三方已记录数据。':
-        'Blank optional criteria mean unrestricted; searches cover only third-party recorded data.',
-    '候选星系': 'Candidate system', '星系价值': 'System value', '区域距离 ly': 'Regional distance ly',
-    '人口达标星系': 'Qualifying populated system', '附近星系人口': 'Nearby system population',
-    '附近星系距离 ly': 'Nearby system distance ly', '匹配星球（按组）': 'Matching planets (by group)',
-    '匹配星环（按组）': 'Matching rings (by group)', '天体关系（推定）': 'Relationships (inferred)',
-    '记录更新时间': 'Record updated', '星球类型': 'Planet subtype', '可着陆': 'Landable',
-    '地球化状态': 'Terraforming state', '重力 G': 'Gravity G', '到达距离 Ls': 'Arrival distance Ls',
-    '表面温度 K': 'Surface temperature K', '表面气压 atm': 'Surface pressure atm',
-    '大气类型': 'Atmosphere', '火山活动类型': 'Volcanism', '半径 km': 'Radius km',
-    '地球质量': 'Earth masses', '潮汐锁定': 'Tidally locked', '自转周期 天': 'Rotation period days',
-    '公转周期 天': 'Orbital period days', '轨道偏心率': 'Orbital eccentricity',
-    '轨道倾角 度': 'Orbital inclination degrees', '轨道半长轴 AU': 'Semi-major axis AU',
-    '储量等级': 'Reserve level', '地表材料': 'Surface materials', '信号类型': 'Signal type', '信号数量': 'Signal count',
-    '天体估算测绘价值': 'Body estimated mapping value', '天体估算扫描价值': 'Body estimated scan value',
-    '是卫星': 'Is a moon', '拥有卫星': 'Has moons', '互绕成员（关系推定）': 'Binary member (inferred)',
-    '星环类型': 'Ring type', '星环内半径 m': 'Ring inner radius m', '星环外半径 m': 'Ring outer radius m',
-    '星环质量（源数据单位）': 'Ring mass (source units)',
-    '复制任务来源星系': 'Copy mission source system',
-    '来源停机坪（可停靠船型）': 'Source pad (ship size)',
-    '来源空间站最大距离 Ls': 'Source station max arrival Ls',
-    '目标星环最大距离 Ls': 'Target rings max arrival Ls',
-    '匹配来源空间站': 'Matching source station', '来源站最大停机坪': 'Source station largest pad',
-    '来源站距离 Ls': 'Source station arrival Ls', '目标有环天体': 'Target ringed body', '星环距离 Ls': 'Ring arrival Ls',
-    '距离留空不限；来源停机坪与距离须同站满足。星环距离为最近已知有环天体的到达 Ls，不是具体 RES 位置。':
-        'Blank distances mean unrestricted; pad and distance must match the same source station. Ring distance is arrival Ls to the nearest known ringed body, not a specific RES.',
-    '查询目标星环距离…': 'Loading target ring arrival distances…',
-    '刷新数据并查询': 'Refresh data and search', '情况未知': 'Unknown',
-    '缓存信息：': 'Cache metadata: ',
-    'RES（星环推定）': 'RES (inferred from rings)', '分阶段耗时：': 'Stage timings: ',
-    '候选地点不保证实时任务。配对与 RES/CNB 数据来自 EDTools；非无政府小派系数量仅估计可能发任务的派系。星环视为推定 RES，不推定 Low；无地点数据标记情况未知。请在游戏中确认 BGS、声望和任务。':
-        'Candidates do not guarantee live missions. EDTools supplies pairs and RES/CNB records; non-Anarchy counts estimate potential issuers. Rings imply RES, not Low; missing site data is Unknown. Verify BGS, reputation and missions in game.',
-    '半径针对任务来源星系；0 不限制距离。有环推定 RES；情况未知单独标注，不作为无 RES 的证据。':
-        'Radius applies to source systems; 0 removes the limit. Rings imply RES. Unknown site data is labelled separately, not evidence of no RES.',
-    '获取配对与地点数据（优先有效缓存）…': 'Loading pairs and sites (valid cache preferred)…',
-    '完整数据下载失败。网页最多覆盖 250 ly，保存的 HTML 只能用于对应有限半径。是否打开网页？':
-        'Full dataset download failed. The website covers at most 250 ly; saved HTML only supports its finite radius. Open the website?',
-    '正在查询名称候选…': 'Looking up name suggestions…',
-    '输入至少两个字符联想；选择候选后使用完整名称。': 'Type at least two characters for suggestions; select a full name.',
-    '已选择完整名称': 'Full name selected',
-    '名称联想失败；可继续手动输入完整名称。': 'Name suggestions failed; you can still type the full name.',
-    '请选择候选完整名称；不自动改写输入。': 'Select a full name from the suggestions; input is not changed automatically.',
-    '未找到名称候选；不代表该派系不存在。': 'No name suggestions found; this does not mean the faction does not exist.',
-    'EDTools 下载失败': 'EDTools download failed',
-    'EDTools 页面下载失败。是否打开对应网页？在浏览器保存 HTML 后，点击“导入 PvE 网页”继续查询。':
-        'EDTools download failed. Open the matching page? Save HTML in your browser, then use Import PvE HTML to continue.',
-    'Elite 星系/空间站全条件筛选器': 'Elite Dangerous System / Station Filter',
-    '类型': 'Type', '要几条': 'Results', '最多翻页': 'Max pages',
-    '+ 普通条件': '+ Field condition', '+ 距离条件': '+ Distance condition',
-    '清空条件': 'Clear', '保存条件': 'Save filters', '读取条件': 'Load filters',
-    '运行搜索': 'Search', '停止': 'Stop', '诊断': 'Diagnostics', '导出CSV': 'Export CSV',
-    '额外功能：': 'Tools:', '两系中点': 'Midpoint', '航母车位': 'Carrier parking',
-    '稀有商品目标查找器': 'Rare goods target finder', '海盗任务查找器': 'Pirate massacre finder',
-    '语言 / Language': '语言 / Language',
-    '到星系距离': 'System distance', '最小LY': 'Min ly', '最大LY': 'Max ly',
-    '范围内': 'Inside', '范围外': 'Outside', '属于其一': 'Is one of', '不属于': 'Is not one of',
-    '等于': 'Equals', '不等于': 'Not equal', '包含': 'Contains', '区间(内)': 'Between',
-    '是': 'True', '否': 'False', '不限': 'Any', '等级': 'Class', '级别': 'Rating',
-    '新鲜度': 'Freshness', '删除': 'Delete', '选值…': 'Select…',
-    '输入过滤, 勾选后确定 (多选用 ; 连接)': 'Type to filter, select values and confirm (multiple values use ;).',
-    '确定': 'OK', '无需填写': 'No value needed', '快捷或手填日期': 'Preset / date',
-    '填日期或近N天': 'Date / last N days', '填数字/min~max': 'Number / min~max',
-    '加载中…': 'Loading…', '自由输入': 'Free text', '请填星系': 'Enter a system',
-    '第三格可下拉/打字联想/点“选值…”多选 (选项≤30个直接下拉)。船/模块名打字联想+自动纠错，行内自带新鲜度选择。':
-        'Choose or type values, or use Select… for multiple values. Ships/modules support suggestions, spelling correction and freshness filters.',
-    '就绪': 'Ready', '名称': 'Name', '星系/位置': 'System / location',
-    '关键信息': 'Details', '各参考点距离': 'Reference distances',
-    '提示': 'Information', '该字段无预置选项, 直接输入即可 (星系/派系名支持模糊)。':
-        'No preset values. Type a value (system/faction names support partial matching).',
-    '未勾选任何值': 'No values selected', '请先添加至少一个条件': 'Add at least one condition first',
-    '距离条件请填写参考星系': 'Enter a reference system for the distance condition',
-    '条件有误': 'Invalid conditions', '条件自相矛盾，一次请求都没发': 'Contradictory conditions; no request sent',
-    '无需检索': 'No search needed', '确认': 'Confirm',
-    '没有任何条件能推给服务器，将逐页硬扫全库\n(慢，且翻页上限内未必扫全)，继续吗？':
-        'No filters can be sent to the server. Scan the database page by page?\nThis is slow and the page limit may leave results incomplete.',
-    '会话保存失败': 'Session save failed',
-    '未关闭程序，请检查目录权限后重试。': 'The application remains open. Check directory permissions and try again.',
-    '查询中...': 'Searching…', '查询中…': 'Searching…', '准备中': 'Preparing', '完成': 'Complete',
-    '已停止': 'Stopped', '未完成': 'Incomplete', '失败': 'Failed', '查询失败': 'Search failed',
-    '正在停止...': 'Stopping…', '停止中': 'Stopping', '诊断中': 'Diagnosing',
-    '诊断中: 取前3页样本统计各条件通过率...': 'Diagnostics: measuring condition pass rates on the first 3 pages…',
-    '诊断完成': 'Diagnostics complete', '诊断失败': 'Diagnostics failed',
-    '通过率仅针对这些候选样本；0% 不代表全库无结果。多距离组合注意两圈是否有交集。':
-        'Pass rates apply only to these samples; 0% does not mean no results exist. Check whether distance regions intersect.',
-    '航母车位查找': 'Carrier parking finder', '参考星系': 'Reference system',
-    '航母数量': 'Carrier count',
-    '最少航母数': 'Min carriers', '最多航母数': 'Max carriers',
-    '留空不限，包含边界': 'Blank: unrestricted; inclusive bounds',
-    '统计状态': 'Count status', '查询航母数量': 'Find carrier counts',
-    '航母类型数据不完整': 'Incomplete station type data',
-    '按已收录航母统计': 'Counted from catalogued carriers',
-    '航母数量须为非负整数，留空不限': 'Carrier bounds must be non-negative integers; blank is unrestricted',
-    '最少航母数不能大于最多航母数': 'Minimum carriers must not exceed maximum carriers',
-    '按站点类型统计 Spansh 已收录航母，不是实时数量或车位预测。类型数据不完整显示未知；数量筛选不包含未知结果。':
-        'Counts use carrier station types catalogued by Spansh, not live positions or parking estimates. Incomplete types show Unknown; count filters exclude Unknown results.',
-    '请填参考星系、有效半径和页数；航母数量为非负整数或留空，最少不能大于最多':
-        'Enter a reference, valid radius and page limit. Carrier bounds must be non-negative integers or blank; minimum must not exceed maximum.',
-    '半径 ly (≤50)': 'Radius ly (≤50)', '最多页数': 'Max pages',
-    '只显示站点少于20的星系': 'Only systems with fewer than 20 stations',
-    '只显示确认免许可的星系': 'Only confirmed permit-free systems',
-    '站点总数包含航母及地面站：<10 大概率有靠近主星的车位；10–19 大概率有车位。数据为 Spansh 已收录记录，实际车位以游戏为准。':
-        'Counts include carriers and planetary stations. <10: likely parking near the main star; 10–19: likely parking. Spansh records are estimates; verify in game.',
-    '输入参考星系后查询；双击结果复制星系名。': 'Enter a reference system and search. Double-click to copy a system name.',
-    '星系': 'System', '距离 ly': 'Distance ly', '站点总数': 'Station count', '航母数': 'Carrier count',
-    '车位判断': 'Parking estimate', '许可': 'Permit', '星系记录年龄': 'System record age',
-    '查找车位': 'Find parking', '导出 CSV': 'Export CSV', '暂无结果': 'No results yet',
-    '参数错误': 'Invalid parameters', '请填参考星系、半径 (大于0且不超过50 ly) 和正整数页数':
-        'Enter a reference system, radius (0 < r ≤ 50 ly) and a positive integer page limit.',
-    '两系中点 - 离中点最近的星系': 'Midpoint - nearest systems', 'A星系': 'System A', 'B星系': 'System B',
-    '仅有人星系': 'Populated only', '排除需许可': 'Exclude permit systems', '查找': 'Find',
-    '输入两星系名后点查找 (支持联想, 打错自动纠)。': 'Enter two systems and click Find (suggestions and spelling correction supported).',
-    '距中点ly': 'Midpoint ly', '距A ly': 'A ly', '距B ly': 'B ly', '人口/阵营/许可': 'Population / allegiance / permit',
-    '要几条请填数字': 'Enter a numeric result limit', '请填写 A、B 星系': 'Enter systems A and B',
-    '查找失败': 'Search failed', '暂无结果, 先运行搜索': 'Run a search first',
-    '商品来源星系': 'Goods source system', '最小距离 ly': 'Min distance ly', '最大距离 ly': 'Max distance ly',
-    '每轮最多页数': 'Pages per search', '筛选来源（星系／商品／站名）': 'Filter sources (system / goods / station)',
-    'Power（关联势力）': 'Power (association)', '全势力扫描（12个）': 'Scan all 12 Powers',
-    '固定条件：大型停机坪、非地面站、排除航母和殖民船、Unoccupied。每个势力先查 ≤100 Ls，确认无结果后查 ≤1000 Ls。':
-        'Fixed filters: large pad, non-planetary, no carriers/colonisation ships, Unoccupied. Each Power: ≤100 Ls first, then ≤1000 Ls only if no hits.',
-    '每个势力最多显示5站：先按距离 ly、再按到站距离 Ls 从近到远。点击势力汇总查看该组；双击明细复制星系名。':
-        'Up to 5 stations per Power, sorted by ly then arrival Ls. Select a Power for details; double-click to copy a system name.',
-    '关联势力': 'Associated Power', '命中站点数': 'Matching stations', '命中星系数': 'Matching systems',
-    '到站上限 Ls': 'Arrival limit Ls', '检索状态': 'Search status', '空间站': 'Station',
-    '到站距离 Ls': 'Arrival Ls', '范围': 'Range', '站点记录年龄': 'Station record age',
-    '标准 ≤100 Ls': 'Standard ≤100 Ls', '放宽 ≤1000 Ls': 'Extended ≤1000 Ls',
-    '请先查询': 'Run a search first', '检索说明': 'Search notes',
-    '请从列表选择来源星系，并填写有效距离区间和正整数页数': 'Select a source system and enter a valid distance range and positive page limit.',
-    '查询失败；不能解释为无结果': 'Search failed; this does not mean no matches exist',
-    '开始查询': 'Search', '全部组明细': 'All group details', '复制星系名': 'Copy system name',
-    '导出全部组 CSV': 'Export all groups CSV',
-    '未知': 'Unknown', '刚刚': 'Just now', '主星附近': 'Near main star', '有车位': 'Likely parking',
-    '需许可': 'Permit required', '免许可': 'No permit', '未达阈值': 'Threshold not met',
-    '半径 ly（0=无限）': 'Radius ly (0=unlimited)', '最少任务派系（0–8）': 'Min mission factions (0–8)',
-    '最少联邦派系（0–8）': 'Min Federation factions (0–8)', '最少帝国派系（0–8）': 'Min Empire factions (0–8)',
-    '来源存在派系': 'Faction present in source', '来源控制小派系': 'Source controlling minor faction',
-    '目标控制小派系': 'Target controlling minor faction', '控制 Power': 'Controlling Power',
-    'Power 筛选对象': 'Power filter applies to', '任务来源': 'Mission source', '击杀目标': 'Pirate target',
-    '双方': 'Both', '优先 RES Low': 'Prefer RES Low', '无 RES 命中时回退 CNB': 'CNB only if no RES matches',
-    '导入 PvE 网页': 'Import PvE HTML', '打开 PvE 网页': 'Open PvE website',
-    '目标星系': 'Target system', '任务派系数': 'Mission factions', '联邦派系数': 'Federation factions',
-    '帝国派系数': 'Empire factions', '战斗地点': 'Combat site', '来源控制派系': 'Source controller',
-    '目标控制派系': 'Target controller', '来源 Power': 'Source Power', '目标 Power': 'Target Power',
-    '来源更新时间': 'Source updated', '目标更新时间': 'Target updated',
-    '网页文件': 'HTML file', '数据错误': 'Data error', '已导入网页；点击开始查询应用条件。': 'HTML imported; click Search to apply filters.',
-    '请选择结果': 'Select a result', '复制目标星系': 'Copy target system',
-    'Spansh Unoccupied；未区分 Expansion / Contested，合并关系尚未样本验证。':
-        'Spansh Unoccupied; Expansion / Contested are not distinguished. Their mapping has not been verified with samples.',
-    ' 使用 Power，不要求由该势力控制。': ' Uses Power association, not controlling Power.',
-    '请选择列表中的来源星系': 'Choose a source system from the list',
-    '来源星系：': 'Source system: ',
-    '候选地点不保证实时任务。配对与 RES/CNB 数据来自 EDTools；非无政府小派系数量仅估计可能发任务的派系。请在游戏中确认 BGS 状态、声望和任务；有星环不代表有 RES。':
-        'Candidates do not guarantee live missions. EDTools provides pairs and RES/CNB records; non-Anarchy faction counts only estimate potential issuers. Verify BGS, reputation and missions in game. Rings alone do not confirm RES.',
-    '半径针对任务来源星系（与 EDTools 一致）；0 不限制距离。默认只查已有明确 RES/CNB 记录的配对。':
-        'Radius applies to mission source systems (as on EDTools); 0 removes the distance limit. Only pairs with explicit RES/CNB records qualify.',
-    '派系计数数据源': 'Faction count source', '地点原始记录': 'Original site record',
-    '已完成当前数据集检索。': 'Search complete within the supplied dataset.',
-    '检索未完成；不能确认不存在 RES 命中。': 'Incomplete; absence of RES matches is unconfirmed.',
-    '详见检索说明。': 'See Search notes.', '数据错误 ': 'Data errors: ',
-    '查询失败，不能判断有无命中。可导入浏览器保存的 EDTools PvE 网页。':
-        'Search failed; no conclusion about matches. Import an EDTools PvE HTML page saved in your browser if needed.',
-    '使用在线数据': 'Use online data', '已切换在线数据；点击开始查询。': 'Switched to online data; click Search.',
-    '正在导入网页...': 'Importing HTML…', '导入失败；保留之前导入的数据。': 'Import failed; previous imported data retained.',
-    '距离条件未填写参考星系': 'Distance condition needs a reference system',
-    '模块等级必须是0~8 (如 5/5级)': 'Module class must be 0–8 (e.g. 5)',
-    '模块级别必须是单个字母 (如 A/B, I表示无级别)': 'Module rating must be one letter (e.g. A/B; I means no rating)',
-    '选项值为空': 'Empty option value', '检索类型必须是 stations 或 systems': 'Search type must be stations or systems',
-    '请填写参考星系': 'Enter a reference system', '未知距离模式': 'Unknown distance mode',
-    '缺少字段': 'Missing field', '未知比较操作': 'Unknown comparison operator', '至少选择一个值': 'Choose at least one value',
-    '缺少比较值': 'Missing comparison value', '数字必须有限': 'Numbers must be finite',
-    '天数必须是正整数': 'day count must be a positive integer', '必须是有限数字': 'must be a finite number',
-    '最小值大于最大值': 'Minimum exceeds maximum', '无边界的范围外没有可满足的结果': 'Unbounded outside range cannot match',
-    '等于条件需要数字': 'Equality requires a number', '距离圈不相交': 'Distance regions do not intersect',
-    '结果数和页数必须大于零，每页数量必须在 1~500 之间': 'Result/page limits must be positive; page size must be 1–500',
-    '服务器候选计数已封顶 (10000)，不代表全库总数': 'Server candidate count is capped at 10000; this is not the database total',
-    '服务器重复返回同一批候选，检索未完成': 'Server repeated the same candidate batch; search incomplete',
-    '部分候选缺少本地复核字段，无法确认: ': 'Some candidates lack local-check fields and cannot be verified: ',
-    '达到翻页上限，检索未完成；当前命中数不是全库结果数': 'Page limit reached; search incomplete. Current hits are not the database total',
-    '已手动停止，返回部分结果': 'Stopped by user; partial results returned',
-    '已达到所需结果数，返回首批命中': 'Requested result count reached; first matches returned',
-    '搜索半径必须大于 0 且不超过 50 ly': 'Search radius must be > 0 and ≤ 50 ly',
-    '翻页上限必须是正整数': 'Page limit must be a positive integer',
-    '模块名包含只本地过滤 (等级/级别已下推)': 'Module name Contains is local only (class/rating filters sent to server)',
-    '多距离交集坐标包围盒已下推': 'Multi-distance intersection bounding box sent to server',
-    '无(请检查拼写)': 'None (check spelling)',
-    '请选择有效的 Power 势力': 'Choose a valid Power',
-    '距离须满足 0 ≤ 最小距离 ≤ 最大距离，且最大距离大于0': 'Distances must satisfy 0 ≤ min ≤ max and max > 0',
-    '每轮最多页数必须是正整数': 'Pages per search must be a positive integer',
-    '标准范围': 'Standard range', '放宽范围': 'Extended range', '无结果': 'No results',
-    '站点数据缺失，无法判断': 'Station data missing; cannot estimate parking',
-    '大概率有靠近主星的车位': 'Likely parking near the main star', '大概率有车位': 'Likely parking',
-    '未达到低于20的推荐阈值': 'Does not meet the recommended <20 threshold', '较拥挤': 'Crowded',
-}
-
-# Reusable fragments for live progress/result/error messages from the existing engine.
-FRAGMENTS = {
-    '查询目标星环距离：': 'Loading target ring arrival distances: ',
-    '按控制 Power 批量预筛选：': 'Batch controlling Power prefilter: ',
-    '控制 Power 分页：': 'Controlling Power pages: ', '；第 ': '; page ', ' 页；': '; ', '已读取 ': 'Read: ',
-    '按控制派系批量预筛选：': 'Batch controller prefilter: ',
-    '查询派系详情：': 'Loading faction details: ', '个星系，最多 ': ' systems, up to ',
-    '并发…': ' concurrent requests…', '个星系': ' systems', '本地复核：': 'Local check: ',
-    '条候选…': ' candidates…', '条结果；耗时 ': ' results; elapsed ', ' 秒': ' seconds',
-    '明确 RES：': 'Confirmed RES: ', '星环推定：': 'Inferred from rings: ', '用时 ': 'Elapsed: ',
-    '数据获取时间：': 'Data fetched at: ', '缓存命中 ': 'Cache hits: ', '显示结果：': 'Rendering results: ',
-    '已纠正为 ': 'Corrected to ', '已自动纠正': 'Auto-corrected', '已保存 ': 'Saved ', '已导出 ': 'Exported ',
-    '个可下拉': ' choices', '个打字筛': ' choices; type to filter', '近': 'Last ', '天': ' days',
-    '分钟前': ' minutes ago', '小时前': ' hours ago', '天前': ' days ago', '多选 ': 'Select multiple ', '单选 ': 'Select one ',
-    '请下拉选择或输入至少一个值, 多个用 ; 分隔': 'Select or type at least one value; separate multiple values with ;',
-    '请下拉选择或输入内容': 'Select or type a value', '请填写数字': 'Enter a number',
-    '区间格式为 最小~最大, 如 0~1000, 空一边表示不封口': 'Use min~max, e.g. 0~1000; leave an end blank for an open range',
-    '未知操作': 'Unknown operator', '服务器候选计数 ': 'Server candidates: ', '已复核 ': 'Checked: ',
-    '命中 ': 'Matches: ', '显示 ': 'Shown: ', '请求中 ': 'Requesting: ', '卖:': 'Selling: ',
-    '在售': 'Selling ', '船厂': 'Shipyard', '改装': 'Outfitting', '市场': 'Market', '模块': 'modules',
-    '等': ' and ', '项': ' items', '船/': 'ships / ', '条': ' rows', '最严, 优先放宽它': 'strictest; relax this first',
-    '样本 ': 'Sample: ', '服务器前3页候选': 'first 3 candidate pages', '通过': 'passed',
-    '检索完成': 'Search complete', '检索未完成（当前仅部分结果，不代表无命中）': 'Incomplete search (partial results, not evidence of no matches)',
-    '检索未完成，当前为部分结果': 'Incomplete search; partial results', '范围内分页已取完': 'All pages in range fetched',
-    '个星系；筛选后请从下拉选择': ' systems; choose from the filtered list',
-    '每势力最多5条，ly优先、Ls其次': 'max 5 per Power; ly then Ls', '扫描候选 ': 'Candidates scanned: ',
-    '个势力': ' Powers', '参考 ': 'Reference: ', '周围 ': ' around ', '扫描 ': 'Scanned: ',
-    '站点数据未知 ': 'Unknown station data: ', '航母数量未知 ': 'Unknown carrier counts: ', '相距 ': 'separation ', '中点': 'midpoint ', '找到 ': 'Found: ',
-    '势力': 'Power', '来源': 'Source', '商品': 'Goods', '到站': 'Arrival', '个': ' ',
-    '已达到所需结果数': 'Requested result count reached', '候选分页已取完': 'All candidate pages fetched',
-    '已手动停止': 'Stopped by user', '达到翻页上限': 'Page limit reached', '解析参考星系': 'Resolving reference system',
-    '正在请求': 'Requesting', '页': 'page', '本地': 'local', '复核': 'check', '候选': 'candidates',
-    '个条件服务器直查': ' server-filtered conditions', '距离范围': 'distance bounds',
-    '正在解析参考星系: ': 'Resolving reference system: ', '正在请求第': 'Requesting page ',
-    '服务器直查第': 'Server-filtered page ', '服务器直查': 'Server-filtered ', '每页': 'per page ',
-    '已扫 ': 'Scanned: ', '已命中 ': 'Matched: ', '有效率': 'hit rate ', '尚未发送请求': 'no request sent yet',
-    '服务器响应无效: ': 'Invalid server response: ', '星系不存在: ': 'System not found: ',
-    '，你是不是想找: ': '; did you mean: ', '未知选项: ': 'Unknown option: ',
-    '由本地过滤 (服务器不支持)': 'is filtered locally (unsupported on server)',
-    '中间挖空只本地过滤': 'outside interval is local only', '新鲜度本地复核': 'freshness checked locally',
-    '多行条件由本地逐行 AND 复核': 'repeated conditions checked locally with AND', '条条件需本地复核': 'conditions need local checks',
-    '从交集中心检索，候选球半径 ': 'Searching from intersection centre; candidate sphere radius ',
-    '矛盾: ': 'Contradiction: ', '的范围无交集': 'ranges do not intersect',
-    '的距离圈不相交': 'distance regions do not intersect', '多距离交集与 ': 'Multi-distance intersection and ',
-    '坐标条件不相交': 'coordinate bounds do not intersect', '已找 ': 'Found: ', '半径 ': 'Radius: ',
-}
+from translations.en import CATALOG, FRAGMENTS  # Compatibility for existing callers/tests.
 
 
-def translate(text, language='zh'):
-    if not isinstance(text, str) or language != 'en':
-        return text
+SOURCE_LANGUAGE = 'zh'
+FALLBACK_LANGUAGE = 'en'
+# Native display names are stable, not translated. Packs are bundled, never downloaded.
+LANGUAGES = {'zh': '中文', 'en': 'English'}
+
+
+def normalize_language(language):
+    return language if language in LANGUAGES else SOURCE_LANGUAGE
+
+
+def language_code(display_name):
+    return next((code for code, label in LANGUAGES.items() if label == display_name), SOURCE_LANGUAGE)
+
+
+def _pack(language):
+    if language == SOURCE_LANGUAGE:
+        return {}, {}
+    module = import_module(f'translations.{language}')
+    return module.CATALOG, getattr(module, 'FRAGMENTS', {})
+
+
+def _english(text):
     if text in CATALOG:
         return CATALOG[text]
     if not re.search(r'[\u3400-\u9fff]', text):
         return text
-    # Field labels remain reversible through their API key in parentheses.
     field = re.fullmatch(r'.*[\u3400-\u9fff].* \(([a-z_]+)\)', text)
     if field:
         key = field.group(1)
@@ -675,7 +43,6 @@ def translate(text, language='zh'):
     text = re.sub(r'=否(?=由本地过滤)', '=False', text)
     catalog = dict(CATALOG, **FRAGMENTS)
     for source in sorted(catalog, key=len, reverse=True):
-        # One-character operator translations must never rewrite sentences/names.
         if len(source) > 1:
             text = text.replace(source, catalog[source])
     text = re.sub(r'第(\d+)条条件', r'Condition \1', text)
@@ -687,21 +54,79 @@ def translate(text, language='zh'):
     return text
 
 
+def translate(text, language=SOURCE_LANGUAGE):
+    if not isinstance(text, str):
+        return text
+    language = normalize_language(language)
+    if language == SOURCE_LANGUAGE:
+        return text
+    if language == FALLBACK_LANGUAGE:
+        return _english(text)
+    catalog, _ = _pack(language)
+    # Whole templates are translated before formatting. Missing entries use English;
+    # do not splice unrelated-language fragments into an English fallback sentence.
+    return catalog.get(text) or _english(text)
+
+
+def format_text(text, language=SOURCE_LANGUAGE, **values):
+    """Translate a complete template, then substitute unchanged runtime values."""
+    return translate(text, language).format(**values)
+
+
+def message(key, language=SOURCE_LANGUAGE, **values):
+    """Format a stable message ID; missing target templates fall back to English."""
+    language = normalize_language(language)
+    source = import_module(f'translations.{SOURCE_LANGUAGE}').MESSAGES
+    fallback = import_module(f'translations.{FALLBACK_LANGUAGE}').MESSAGES
+    target = getattr(import_module(f'translations.{language}'), 'MESSAGES', {})
+    template = target.get(key) or fallback.get(key) or source.get(key)
+    if template is None:
+        raise KeyError(f'Unknown translation message: {key}')
+    return template.format(**values)
+
+
+def export_text(value, language):
+    """Apply a pack's export policy, independently of the CSV implementation."""
+    language = normalize_language(language)
+    if getattr(import_module(f'translations.{language}'), 'EXPORT_ESCAPE_CJK', False):
+        return re.sub(r'[\u3400-\u9fff]', lambda match: '\\u%04x' % ord(match[0]), value)
+    return value
+
+
+def missing_translations(language):
+    """Return canonical English-pack keys missing from a registered target pack."""
+    if language not in LANGUAGES:
+        raise ValueError('Unsupported language')
+    if language == SOURCE_LANGUAGE:
+        return []
+    catalog, _ = _pack(language)
+    source_messages = import_module(f'translations.{SOURCE_LANGUAGE}').MESSAGES
+    target_messages = getattr(import_module(f'translations.{language}'), 'MESSAGES', {})
+    return sorted(set(CATALOG) - set(catalog)) + [
+        f'@{key}' for key in sorted(set(source_messages) - set(target_messages))]
+
+
 class Localizer:
-    def __init__(self, root, language='zh'):
-        self.root, self.language = root, language if language in ('zh', 'en') else 'zh'
+    def __init__(self, root, language=SOURCE_LANGUAGE):
+        self.root, self.language = root, normalize_language(language)
         self.callbacks = set()
         root._localizer = self
 
     def tr(self, text):
         return translate(text, self.language)
 
+    def format(self, text, **values):
+        return format_text(text, self.language, **values)
+
+    def message(self, key, **values):
+        return message(key, self.language, **values)
+
     def register(self, callback):
         self.callbacks.add(callback)
         callback()
 
     def set_language(self, language):
-        if language not in ('zh', 'en'):
+        if language not in LANGUAGES:
             raise ValueError('Unsupported language')
         self.language = language
         for callback in tuple(self.callbacks):

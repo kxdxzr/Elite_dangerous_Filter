@@ -56,29 +56,40 @@ def open_window(app, data_age):
     describe_source()
     options = ttk.Frame(win, padding=(8, 0))
     options.pack(fill="x")
-    ttk.Label(options, text="Power（关联势力）").pack(side="left")
+    power_label = ttk.Label(options, text="Power（关联势力）")
+    power_label.pack(side="left")
     power = tk.StringVar(value=tool.POWER_LABELS[tool.POWERS[0]])
     cb_power = ttk.Combobox(options, textvariable=power, state="readonly", width=36,
                             values=[tool.POWER_LABELS[p] for p in tool.POWERS])
     cb_power.pack(side="left", padx=4, fill='x', expand=True)
     all_powers = tk.BooleanVar(value=False)
-    ttk.Checkbutton(options, text="全势力扫描（12个）", variable=all_powers,
-                    command=lambda: cb_power.configure(state="disabled" if all_powers.get()
-                                                        else "readonly")).pack(side="left", padx=8)
+
+    def sync_power_state():
+        disabled = all_powers.get()
+        cb_power.configure(state='disabled' if disabled else 'readonly')
+        power_label.configure(text='Power（关联势力，已停用）' if disabled else 'Power（关联势力）')
+
+    all_powers_toggle = ttk.Checkbutton(options, text="全势力扫描（12个）", variable=all_powers,
+                                       command=sync_power_state)
+    all_powers_toggle.pack(side="left", padx=8)
+    win.power_selector, win.power_label, win.all_powers_toggle = cb_power, power_label, all_powers_toggle
     neutron_only = tk.BooleanVar(win, value=False)
     # Fixed-range position estimates, independent of ship-specific exact routing.
     if tool.ENABLE_NEUTRON_FILTER:
         neutron_controls = ttk.Frame(win, padding=(8, 4))
         neutron_controls.pack(fill='x')
         ttk.Checkbutton(neutron_controls, text='仅显示顺路中子星辅助目标（实验性功能）', variable=neutron_only).pack(side='left')
-        ttk.Label(neutron_controls, text='去程40 ly／返程50 ly；来源200 ly内中子星；到达距离≤100 Ls',
-                  style='Muted.TLabel').pack(side='left', padx=8)
-        ttk.Label(win, text='顺路条件逐势力放宽：30°／10% → 45°／25% → 60°／50%，有结果即停；40／50 ly仅作内部参考，不用于排除候选，不保证实际省跳。',
-                  style='Muted.TLabel', wraplength=1160).pack(fill='x', padx=8)
-    ttk.Label(win, text="固定条件：大型停机坪、非地面站、排除航母和殖民船、Unoccupied。每个势力先查 ≤100 Ls，确认无结果后查 ≤1000 Ls。",
-              wraplength=1160).pack(fill="x", padx=8, pady=(8, 0))
-    ttk.Label(win, text=tool.STATE_NOTE + " 使用 Power，不要求由该势力控制。",
-              style='Muted.TLabel', wraplength=1160).pack(fill="x", padx=8, pady=4)
+    from usage_help import usage_help
+    notes = [
+        "固定条件：大型停机坪、非地面站、排除航母和殖民船、Unoccupied。每个势力先查 ≤100 Ls，确认无结果后查 ≤1000 Ls。",
+        tool.STATE_NOTE + " 使用 Power，不要求由该势力控制。",
+    ]
+    if tool.ENABLE_NEUTRON_FILTER:
+        notes.extend([
+            '去程40 ly／返程50 ly；来源200 ly内中子星；到达距离≤100 Ls',
+            '顺路条件逐势力放宽：30°／10% → 45°／25% → 60°／50%，有结果即停；40／50 ly仅作内部参考，不用于排除候选，不保证实际省跳。',
+        ])
+    win.usage_help = usage_help(win, notes)
     status = tk.StringVar(value="每个势力最多显示5个星系，同星系只算一个结果；空间站仅供参考，保留最近的合格站点。双击明细复制星系名。")
     ttk.Label(win, textvariable=status, wraplength=1160).pack(fill="x", padx=8)
     progressbar = ttk.Progressbar(win, mode="indeterminate")
@@ -268,7 +279,7 @@ def open_window(app, data_age):
         reference.set("Ngurii")
     if not tool.ENABLE_NEUTRON_FILTER:
         neutron_only.set(False)
-    cb_power.configure(state="disabled" if all_powers.get() else "readonly")
+    sync_power_state()
 
     def close():
         stop.set()

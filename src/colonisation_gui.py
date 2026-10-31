@@ -13,14 +13,19 @@ import colonisation_tool as tool
 
 
 class GroupEditor:
-    def __init__(self, parent, fields, mode, saved, changed):
+    def __init__(self, parent, fields, mode, saved, changed, *, values=None, operators=None,
+                 hint='AND：全部存在；OR：任一存在。组内条件由同一天体／星环同时满足。'):
         self.fields, self.groups, self.changed = fields, [], changed
+        self.values = tool.VALUES if values is None else values
+        self.operators = tool.OPERATORS if operators is None else operators
         header = ttk.Frame(parent)
         header.pack(fill='x')
         ttk.Label(header, text='条件组之间').pack(side='left', padx=4)
         ttk.Combobox(header, textvariable=mode, values=['AND', 'OR'], state='readonly', width=8).pack(side='left')
-        ttk.Label(header, text='AND：全部存在；OR：任一存在。组内条件由同一天体／星环同时满足。').pack(side='left', padx=8)
         ttk.Button(header, text='添加条件组', command=self.add_group).pack(side='right', padx=4)
+        hint_label = ttk.Label(header, text=hint, wraplength=600, justify='left')
+        hint_label.pack(side='left', fill='x', expand=True, padx=8)
+        hint_label.bind('<Configure>', lambda e: hint_label.configure(wraplength=max(120, e.width)))
         area = ttk.Frame(parent)
         area.pack(fill='both', expand=True)
         self.canvas = tk.Canvas(area, height=220, highlightthickness=0)
@@ -85,13 +90,13 @@ class GroupEditor:
         group['rows'].append(row)
         field_box = ttk.Combobox(frame, textvariable=row['field'], values=list(self.fields.values()), state='readonly', width=30)
         field_box.pack(side='left', padx=3)
-        ttk.Combobox(frame, textvariable=row['op'], values=tool.OPERATORS, state='readonly', width=10).pack(side='left', padx=3)
+        ttk.Combobox(frame, textvariable=row['op'], values=self.operators, state='readonly', width=10).pack(side='left', padx=3)
         value_box = ttk.Combobox(frame, textvariable=row['value'], width=50)
         value_box.pack(side='left', fill='x', expand=True, padx=3)
 
         def update_choices(*args):
             key = next((k for k, label in self.fields.items() if label == row['field'].get()), '')
-            value_box.configure(values=tool.VALUES.get(key, []))
+            value_box.configure(values=self.values.get(key, []))
             self.changed()
 
         row['traces'] = [(row['field'], row['field'].trace_add('write', update_choices))]
@@ -107,7 +112,7 @@ class GroupEditor:
             frame.destroy()
             self.changed()
 
-        ttk.Button(frame, text='删除条件', command=delete).pack(side='right', padx=3)
+        ttk.Button(frame, text='删除条件', command=delete).pack(side='right', padx=3, before=value_box)
         self.changed()
 
 
@@ -148,20 +153,24 @@ def open_window(app):
             section.columnconfigure(index, weight=1)
     controls.columnconfigure(0, weight=1)
     controls.columnconfigure(1, weight=1)
-    ttk.Label(win, text='两套距离独立且同时启用时为 AND；最近距离先找最近人口达标星系，再判断上下限，包含边界。',
-              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
+    from usage_help import usage_help
+    win.usage_help = usage_help(win, (
+        '停止或网络异常后可继续；条件不变沿用断点，条件改变先确认再重查。断点仅保留在当前窗口，预计时间为动态估算，不含暂停等待。',
+        '整体显示候选覆盖与命中目标；本页步骤会随分页和分批循环。预计时间根据实测速度给出区间，无法可靠估算时明确提示。',
+        '天体类别选 Star 可筛恒星；恒星类型和是否主星须由同一颗恒星满足。旧星球条件仍只匹配行星，主星标记缺失为未知。',
+        '两套距离独立且同时启用时为 AND；最近距离先找最近人口达标星系，再判断上下限，包含边界。',
+        'in 多选及 between 范围用 | 分隔；布尔值用 true / false。互绕按共同直接质心和相同周期推定，复杂／缺失关系为未知。',
+    ))
     ttk.Label(win, text='强制：零人口、无任何站点（含航母）、明确无需许可。可选数值留空不限，0 是实际阈值。',
               wraplength=1360).pack(fill='x', padx=8)
-    ttk.Label(win, text='in 多选及 between 范围用 | 分隔；布尔值用 true / false。互绕按共同直接质心和相同周期推定，复杂／缺失关系为未知。',
-              wraplength=1360, style='Muted.TLabel').pack(fill='x', padx=8)
     tabs = ttk.Notebook(win)
     tabs.pack(fill='x', padx=8, pady=5)
     body_tab, ring_tab = ttk.Frame(tabs), ttk.Frame(tabs)
-    tabs.add(body_tab, text='星球条件')
+    tabs.add(body_tab, text='天体条件')
     tabs.add(ring_tab, text='独立星环条件')
     # ttk.Notebook does not use TextMixin; translate its titles explicitly.
     def localize_tabs():
-        tabs.tab(body_tab, text=app.localizer.tr('星球条件'))
+        tabs.tab(body_tab, text=app.localizer.tr('天体条件'))
         tabs.tab(ring_tab, text=app.localizer.tr('独立星环条件'))
     app.localizer.register(localize_tabs)
     editors = {}
@@ -188,7 +197,7 @@ def open_window(app):
     bar.pack(fill='x', padx=8, pady=4)
     from search_progress import SearchProgress
     progress_text = tk.StringVar(win)
-    ttk.Label(win, textvariable=progress_text).pack(fill='x', padx=8)
+    ttk.Label(win, textvariable=progress_text, justify='left', wraplength=1320).pack(fill='x', padx=8)
     tracker = SearchProgress(bar, progress_text, app.localizer)
     frame = ttk.Frame(win)
     frame.pack(fill='both', expand=True, padx=8)
@@ -198,7 +207,7 @@ def open_window(app):
                 ('neighbour', '最近有人星系'), ('near_distance', '最近有人星系距离 ly'),
                 ('neighbour_pad', '最近有人星系最大停机坪'),
                 ('distance', '区域距离 ly'), ('value', '星系价值'),
-                ('body_matches', '匹配星球（按组）'), ('ring_matches', '匹配星环（按组）'),
+                ('body_matches', '匹配天体（按组）'), ('ring_matches', '匹配星环（按组）'),
                 ('relations', '天体关系（推定）'),
                 ('scan_status', '扫描价值数据完整性'), ('updated', '记录更新时间')]
     tree = ttk.Treeview(frame, columns=[key for key, _ in columns], show='headings')
@@ -214,36 +223,36 @@ def open_window(app):
     frame.rowconfigure(0, weight=1)
     frame.columnconfigure(0, weight=1)
     events, stop = queue.Queue(), threading.Event()
-    state = {'rows': [], 'info': None, 'busy': False, 'progress': ''}
+    state = {'rows': [], 'info': None, 'busy': False, 'progress': '', 'checkpoint': {}}
 
     def render_status():
-        en = app.localizer.language == 'en'
         info = state['info']
-        if info:
+        if info and not state['busy']:
             reasons = {
                 'All supplied candidate pages fetched.': '已取完数据源候选分页。',
                 'Page limit reached; results are incomplete.': '达到翻页上限，结果不完整。',
                 'Result limit reached; results are incomplete.': '达到结果数量上限，结果不完整。',
                 'Repeated system page; results are incomplete.': '服务器返回重复分页，结果不完整。',
                 'Search cancelled; results are incomplete.': '已停止，结果不完整。',
+                'Network interrupted; verified results retained. Continue to retry.': '网络暂时异常，已保留核实结果；可继续检索',
             }
-            if en:
-                text = f"Scanned: {info['scanned']:,}; matches: {len(state['rows']):,}; unknown: {info['unknown']:,}. {info['reason']}"
-            else:
-                text = f"扫描 {info['scanned']:,}；匹配 {len(state['rows']):,}；数据未知 {info['unknown']:,}。" + reasons.get(info['reason'], info['reason'])
+            text = app.localizer.message('colonisation.summary', scanned=info['scanned'],
+                                         matches=len(state['rows']), unknown=info['unknown'],
+                                         reason=app.localizer.tr(reasons.get(info['reason'], info['reason'])))
             status.set(text)
+            if info.get('error'):
+                status.set(text + '；' + info['error'])
         elif state['busy']:
             text = state['progress']
             page = re.fullmatch(r'Page (\d+); scanned (\d+); matches (\d+)', text)
             batch = re.fullmatch(r'Body batches (\d+)/(\d+); matches (\d+)', text)
             if page:
                 a, scanned, hits = map(int, page.groups())
-                text = (f'Page {a:,}; scanned {scanned:,}; matches {hits:,}' if en else
-                        f'分页 {a:,}；已扫描 {scanned:,}；匹配 {hits:,}')
-            elif not en and batch:
+                text = app.localizer.message('colonisation.page', page=a, scanned=scanned, matches=hits)
+            elif batch:
                 a, b, hits = batch.groups()
-                text = f'天体批次 {a}/{b}；匹配 {hits}'
-            status.set(text or ('Searching...' if en else '查询中...'))
+                text = app.localizer.message('colonisation.batch', done=a, total=b, matches=hits)
+            status.set(text or app.localizer.tr('查询中...'))
     app.localizer.register(render_status)
 
     def criteria():
@@ -270,7 +279,7 @@ def open_window(app):
                 app.localizer.tr('已记录天体完整' if complete else '数据不完整，仅列已知估值'),
                 row.get('updated_at', ''))
 
-    def run(refresh=False):
+    def run(refresh=False, continuing=False):
         if state['busy']:
             return
         try:
@@ -278,20 +287,35 @@ def open_window(app):
         except (ValueError, TypeError, KeyError) as exc:
             messagebox.showwarning('条件有误', str(exc), parent=win)
             return
+        if state['checkpoint'].get('paused'):
+            if c != state['criteria'] or refresh:
+                if not messagebox.askyesno('重新开始检索', '查询条件或限制已改变。是否清除旧结果和断点，按新条件重新开始？', parent=win):
+                    return
+                continuing = False
+            else:
+                continuing = True
+                refresh = state['refresh']
+        elif continuing:
+            return
         stop.clear()
         state['busy'] = True
         state['progress'] = ''
-        state['info'], state['rows'] = None, []
-        tree.delete(*tree.get_children())
+        if not continuing:
+            import copy
+            state.update(info=None, rows=[], checkpoint={}, criteria=copy.deepcopy(c), refresh=refresh)
+            tree.delete(*tree.get_children())
         search_button.configure(state='disabled')
         refresh_button.configure(state='disabled')
         stop_button.configure(state='normal')
+        continue_button.configure(state='disabled')
         render_status()
+        tracker.begin(continuing)
         tracker.update()
 
         def worker():
             try:
-                info, rows = tool.search(c, progress=lambda text, detail=None: events.put(('progress', (text, detail))), stop=stop, refresh=refresh)
+                info, rows = tool.search(c, progress=lambda text, detail=None: events.put(('progress', (text, detail))), stop=stop, refresh=refresh,
+                                         resume=state['checkpoint'])
                 events.put(('done', (info, rows)))
             except Exception as exc:
                 events.put(('error', str(exc)))
@@ -321,6 +345,8 @@ def open_window(app):
     refresh_button.pack(side='left', padx=4)
     stop_button = ttk.Button(actions, text='停止', command=stop.set, state='disabled')
     stop_button.pack(side='left', padx=4)
+    continue_button = ttk.Button(actions, text='继续检索', command=lambda: run(continuing=True), state='disabled')
+    continue_button.pack(side='left', padx=4)
     ttk.Button(actions, text='复制星系名', command=copy).pack(side='left', padx=4)
     ttk.Button(actions, text='复制最近有人星系', command=lambda: copy('_neighbour')).pack(side='left', padx=4)
     ttk.Button(actions, text='导出CSV', command=export).pack(side='left', padx=4)
@@ -347,14 +373,17 @@ def open_window(app):
                 stop_button.configure(state='disabled')
                 bar.stop()
                 if event == 'error':
+                    continue_button.configure(state='disabled')
                     tracker.finish(False)
                     status.set(data)
                     messagebox.showerror('查询失败', data, parent=win)
                     continue
                 info, rows = data
                 state.update(info=info, rows=rows)
+                continue_button.configure(state='normal' if state['checkpoint'].get('paused') else 'disabled')
                 tracker.finish(info['complete'])
                 render_status()
+                tree.delete(*tree.get_children())
                 for index, row in enumerate(rows):
                     tree.insert('', 'end', iid=str(index), values=values(row))
         except queue.Empty:
