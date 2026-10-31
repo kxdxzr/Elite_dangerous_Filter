@@ -1,15 +1,29 @@
 import copy
+from contextlib import contextmanager
 from dataclasses import replace
 from html import escape
 import threading
 import io
 import urllib.error
+import urllib.request
 import unittest
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pve_tool as pve
+
+
+@contextmanager
+def mock_pve_transport(**kwargs):
+    """Keep unrelated background requests out of this module's network mock."""
+    opener = Mock(**kwargs)
+    transport = SimpleNamespace(
+        request=SimpleNamespace(Request=urllib.request.Request, urlopen=opener),
+        error=urllib.error, parse=pve.urllib.parse)
+    with patch.object(pve, 'urllib', transport):
+        yield opener
 
 
 def candidate(source='Alpha', target='Target', distance=20, sites=('low',), cnb=False, rings=3):
@@ -94,7 +108,7 @@ class PveParserTests(unittest.TestCase):
         sites = {'Target': dict(haz='', high='', reg='', low='1', beac=0)}
         with patch.object(pve, 'fetch_dataset', side_effect=[pairs, sites]) as fetch, \
                 patch.object(pve.eng, 'get_system_coords', return_value=(0, 0, 0)), \
-                patch.object(pve.urllib.request, 'urlopen') as html:
+                mock_pve_transport() as html:
             data = pve.fetch_page(pve.Criteria(radius=0), 'Sol')
         self.assertEqual([call.args[0] for call in fetch.call_args_list], [pve.PAIRS_URL, pve.SITES_URL])
         self.assertEqual(data['rows'][0]['distance'], 1000)
@@ -115,14 +129,24 @@ class PveParserTests(unittest.TestCase):
                 pve.parse_page(html.replace('rows: 1,000', 'rows: ' + bad))
 
     def test_download_uses_explicit_php_without_multiviews(self):
-        with patch.object(pve.urllib.request, 'urlopen', return_value=io.BytesIO(html_page([candidate()]).encode())) as get:
+        with mock_pve_transport(return_value=io.BytesIO(html_page([candidate()]).encode())) as get:
             parsed = pve.fetch_page(pve.Criteria(), 'Sol')
         self.assertEqual(len(parsed['rows']), 1)
         self.assertTrue(get.call_args.args[0].full_url.startswith('https://edtools.cc/pve.php?'))
 
+    def test_download_transport_does_not_capture_unrelated_background_requests(self):
+        with patch.object(urllib.request, 'urlopen') as unrelated, \
+                mock_pve_transport(return_value=io.BytesIO(html_page([candidate()]).encode())) as get:
+            parsed = pve.fetch_page(pve.Criteria(), 'Sol')
+            urllib.request.urlopen('https://example.invalid/unrelated')
+        self.assertEqual(len(parsed['rows']), 1)
+        get.assert_called_once()
+        self.assertTrue(get.call_args.args[0].full_url.startswith('https://edtools.cc/pve.php?'))
+        unrelated.assert_called_once_with('https://example.invalid/unrelated')
+
     def test_download_error_identifies_server_and_matching_url(self):
         error = urllib.error.HTTPError(pve.BASE, 406, 'Not Acceptable', {}, None)
-        with patch.object(pve.urllib.request, 'urlopen', side_effect=error):
+        with mock_pve_transport(side_effect=error):
             with self.assertRaises(pve.PageDownloadError) as caught:
                 pve.fetch_page(pve.Criteria(reference='slo'), 'Sol')
         self.assertEqual(caught.exception.code, 406)
