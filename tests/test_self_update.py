@@ -41,7 +41,9 @@ class SelfUpdateTests(unittest.TestCase):
             config = json.loads(Path(args[0][-1]).read_text())
             Path(config['ready']).write_text('ready')
             return process
-        with patch.object(update, 'urlopen', return_value=self.response()), patch.object(update.subprocess, 'Popen', side_effect=launch):
+        with patch.dict(update.os.environ, SystemRoot=str(self.folder / 'mock-windows')), \
+                patch.object(update, 'urlopen', return_value=self.response()), \
+                patch.object(update.subprocess, 'Popen', side_effect=launch):
             prepared = update.prepare_update(self.release, self.target)
         self.assertEqual(self.target.read_bytes(), b'old-executable')
         self.assertEqual((prepared.folder / 'new.exe').read_bytes(), self.payload)
@@ -99,7 +101,16 @@ class SelfUpdateTests(unittest.TestCase):
                 target.write_bytes(old)
                 payload = b'MZinvalid-executable' if fail else new
                 staged.write_bytes(payload)
-                parent = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(2)'])
+                parent_exit = folder / 'parent-exit'
+                parent_program = (
+                    'import sys, time\n'
+                    'from pathlib import Path\n'
+                    'gate = Path(sys.argv[1])\n'
+                    'deadline = time.monotonic() + 45\n'
+                    'while not gate.exists() and time.monotonic() < deadline:\n'
+                    '    time.sleep(.02)\n'
+                )
+                parent = subprocess.Popen([sys.executable, '-c', parent_program, str(parent_exit)])
                 config = dict(pid=parent.pid, notify=False, target=str(target), staged=str(staged),
                               sha256=hashlib.sha256(payload).hexdigest(), backup=str(folder / 'old.exe'),
                               failed=str(folder / 'failed.exe'), ready=str(folder / 'ready'),
@@ -119,17 +130,26 @@ class SelfUpdateTests(unittest.TestCase):
                         staged.write_bytes(b'tampered')
                     Path(config['go']).write_bytes(b'go')
                     time.sleep(.1)
+                    self.assertIsNone(parent.poll(), 'Parent must stay alive until explicitly released')
                     self.assertEqual(target.read_bytes(), old)  # parent still running
+                    parent_exit.write_bytes(b'exit')
+                    parent.wait(timeout=10)
                     _, stderr = process.communicate(timeout=30)
-                    self.assertEqual(process.returncode, 0 if mode == 'success' else 1, stderr)
+                    log = Path(config['log'])
+                    diagnostics = (log.read_text(encoding='utf-8', errors='replace') if log.exists()
+                                   else 'Helper produced no log') + '\n' + repr(stderr)
+                    self.assertEqual(process.returncode, 0 if mode == 'success' else 1, diagnostics)
                     self.assertEqual(target.read_bytes(), new if mode == 'success' else old)
                     if mode == 'success':
                         self.assertEqual(Path(config['backup']).read_bytes(), old)
                     elif fail:
+                        self.assertTrue(Path(config['failed']).exists(), diagnostics)
                         self.assertEqual(Path(config['failed']).read_bytes(), payload)
                     self.assertTrue(Path(config['log']).exists())
                 finally:
                     if process.poll() is None:
                         process.kill()
                         process.wait()
+                    if parent.poll() is None:
+                        parent.terminate()
                     parent.wait(timeout=10)

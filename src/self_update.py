@@ -18,6 +18,7 @@ HELPER = r'''param([string]$Config)
 $ErrorActionPreference = 'Stop'
 $c = Get-Content -LiteralPath $Config -Raw -Encoding UTF8 | ConvertFrom-Json
 $changed = $false
+$phase = 'Waiting for update authorization'
 try {
     $parent = $null
     try { $parent = [Diagnostics.Process]::GetProcessById([int]$c.pid) } catch {}
@@ -27,10 +28,13 @@ try {
         if ([DateTime]::UtcNow -gt $deadline) { exit 0 }
         Start-Sleep -Milliseconds 100
     }
+    $phase = 'Waiting for old process to exit'
     if ($parent -and !$parent.WaitForExit(60000)) { throw 'Old process did not exit; update cancelled.' }
+    $phase = 'Verifying staged EXE hash'
     if ((Get-FileHash -LiteralPath $c.staged -Algorithm SHA256).Hash.ToLowerInvariant() -ne $c.sha256) {
         throw 'Staged EXE hash changed; update cancelled.'
     }
+    $phase = 'Replacing EXE and backing up old file'
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     while ($true) {
         try {
@@ -42,6 +46,7 @@ try {
             Start-Sleep -Milliseconds 500
         }
     }
+    $phase = 'Launching updated EXE'
     $start = New-Object Diagnostics.ProcessStartInfo
     $start.FileName = $c.target
     $start.WorkingDirectory = [IO.Path]::GetDirectoryName($c.target)
@@ -51,7 +56,7 @@ try {
     if (!$process) { throw 'Unable to launch updated EXE.' }
     [IO.File]::WriteAllText($c.log, 'Update installed; old EXE retained at ' + $c.backup)
 } catch {
-    $failure = $_.Exception.Message
+    $failure = $phase + "`n" + $_.Exception.ToString()
     if ($changed) {
         try {
             [IO.File]::Replace($c.backup, $c.target, $c.failed, $true)
