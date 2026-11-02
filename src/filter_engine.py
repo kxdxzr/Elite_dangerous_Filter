@@ -1127,16 +1127,16 @@ def tighten_distance_payload(kind, payload, conditions, coord_cache, notes):
 
 
 def search(kind, conditions, want=200, max_pages=25, progress=None,
-           corrections=None, stop=None, notes=None, page_size=500, row_filter=None, http=None,
-           resume=None):
+            corrections=None, stop=None, notes=None, page_size=500, row_filter=None, http=None,
+            resume=None, route_bound=None, on_results=None):
     """Optionally return verified partial results and a resumable network pause."""
     import search_recovery
     if resume is not None:
-        search_recovery.bind(resume, json.dumps([kind, conditions, want, max_pages, page_size], sort_keys=True))
+        search_recovery.bind(resume, json.dumps([kind, conditions, want, max_pages, page_size, route_bound], sort_keys=True))
     try:
         with request_control.context(stop, lambda text: _report(progress, text, stage='网络冷却', done=0, work_total=None)):
             result = _search(kind, conditions, want, max_pages, progress, corrections,
-                             stop, notes, page_size, row_filter, http, resume)
+                             stop, notes, page_size, row_filter, http, resume, route_bound, on_results)
     except Exception as error:
         if isinstance(error, InterruptedError) and resume is not None and stop is not None and stop.is_set():
             result = (list(resume.get('rows', [])), resume.get('total', 0), resume.get('display_scanned', 0))
@@ -1157,8 +1157,8 @@ def search(kind, conditions, want=200, max_pages=25, progress=None,
 
 
 def _search(kind, conditions, want=200, max_pages=25, progress=None,
-            corrections=None, stop=None, notes=None, page_size=500, row_filter=None, http=None,
-            resume=None):
+             corrections=None, stop=None, notes=None, page_size=500, row_filter=None, http=None,
+             resume=None, route_bound=None, on_results=None):
     """一次规划 -> 流式分页 -> 去重 -> 精确复核。
     返回 (rows, total_server, scanned)，终止原因记录在 notes。
     count 是后端封顶的候选数，不能据此判断已遍历全库。
@@ -1167,6 +1167,8 @@ def _search(kind, conditions, want=200, max_pages=25, progress=None,
         notes = []
     if want < 1 or max_pages < 1 or not 1 <= page_size <= 500:
         raise ValueError("结果数和页数必须大于零，每页数量必须在 1~500 之间")
+    from route_geometry import Envelope
+    envelope = Envelope(*route_bound) if route_bound is not None else None
     cancelled = lambda: stop is not None and stop.is_set()
     if cancelled():
         notes.append("已手动停止，尚未发送请求")
@@ -1208,6 +1210,8 @@ def _search(kind, conditions, want=200, max_pages=25, progress=None,
     try:
         template = build_server_payload(kind, conditions, size=per)
         template = tighten_distance_payload(kind, template, conditions, coord_cache, notes)
+        if envelope is not None:
+            template = envelope.tighten(kind, template, conditions, notes)
     except Contradiction as exc:
         notes.append(str(exc))
         return [], 0, 0
@@ -1270,7 +1274,9 @@ def _search(kind, conditions, want=200, max_pages=25, progress=None,
                 if ident in seen or ident in pending:
                     continue
                 pending.add(ident)
-                if not is_excluded_system(kind, r) and match_candidate(kind, r, cheap, coord_cache, template['filters'], missing):
+                if (not is_excluded_system(kind, r)
+                        and (envelope is None or envelope.contains(result_coords(kind, r)))
+                        and match_candidate(kind, r, cheap, coord_cache, template['filters'], missing)):
                     survivors.append(r)
             block_size = min(32, max(8, want - len(out)))
             blocks = [survivors[i:i + block_size] for i in range(0, len(survivors), block_size)]
@@ -1296,6 +1302,8 @@ def _search(kind, conditions, want=200, max_pages=25, progress=None,
                 _report(progress, '正在核查候选…', phase='details' if detailed else 'fetch',
                         scanned=scanned, total=total, hits=len(out), want=want)
             if is_excluded_system(kind, r):
+                continue
+            if envelope is not None and not envelope.contains(result_coords(kind, r)):
                 continue
             if detailed and id(r) in block_for and block_for[id(r)] not in prepared:
                 index = block_for[id(r)]
@@ -1329,6 +1337,9 @@ def _search(kind, conditions, want=200, max_pages=25, progress=None,
                 if emitted_key not in emitted:
                     out.append(r)
                     emitted.add(emitted_key)
+                    if on_results is not None:
+                        # Only fully verified new rows; callers own their snapshot.
+                        on_results([copy.deepcopy(r)])
                 if len(out) >= want:
                     reason = "已达到所需结果数，返回首批命中"
                     break

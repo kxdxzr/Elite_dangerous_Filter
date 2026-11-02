@@ -160,8 +160,9 @@ def search(criteria, want=100, max_pages=25, progress=None, stop=None):
         return True
 
     rows, total, scanned = eng.search('stations', conditions, want=want, max_pages=max_pages,
-                                      progress=progress, stop=stop, notes=notes, corrections=corrections,
-                                      row_filter=on_route)
+                                       progress=progress, stop=stop, notes=notes, corrections=corrections,
+                                       row_filter=on_route,
+                                       route_bound=(origin, destination, budget * criteria.jump_range))
     fixed = dict(corrections)
     for condition in conditions:
         for key in ('ref_system', 'text'):

@@ -274,7 +274,8 @@ def open_window(app):
                 row['_neighbour'], format_ly(row['_neighbour_distance']),
                 app.localizer.tr(row.get('_neighbour_pad', '情况未知') if row['_neighbour'] else ''),
                 format_ly(row.get('distance')),
-                format_number(row.get(state['info']['value_field']), app.localizer.tr('情况未知')),
+                format_number(row.get(state['info']['value_field'] if state['info'] else
+                                      state['criteria'].value_field), app.localizer.tr('情况未知')),
                 row['_body_matches'], row['_ring_matches'], row['_relations'],
                 app.localizer.tr('已记录天体完整' if complete else '数据不完整，仅列已知估值'),
                 row.get('updated_at', ''))
@@ -315,7 +316,8 @@ def open_window(app):
         def worker():
             try:
                 info, rows = tool.search(c, progress=lambda text, detail=None: events.put(('progress', (text, detail))), stop=stop, refresh=refresh,
-                                         resume=state['checkpoint'])
+                                         resume=state['checkpoint'],
+                                         on_results=lambda batch: events.put(('rows', batch)))
                 events.put(('done', (info, rows)))
             except Exception as exc:
                 events.put(('error', str(exc)))
@@ -361,6 +363,12 @@ def open_window(app):
         try:
             while True:
                 event, data = events.get_nowait()
+                if event == 'rows':
+                    for row in data:
+                        index = len(state['rows'])
+                        state['rows'].append(row)
+                        tree.insert('', 'end', iid=str(index), values=values(row))
+                    continue
                 if event == 'progress':
                     text, detail = data
                     state['progress'] = text

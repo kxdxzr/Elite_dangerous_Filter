@@ -390,7 +390,7 @@ class LocalizedGuiTests(unittest.TestCase):
                     confirmed_res=0, inferred_res=401, diagnostics={}, timings={'total': 0.1})
         window.search_state['page'] = {'imported': True}
         with patch.object(pve_gui.tool, 'search', return_value=(info, rows)) as search:
-            find(window, 'Refresh data and search').invoke()
+            find(window, 'Refresh dynamic details and search').invoke()
             deadline = time.monotonic() + 5
             while len(window.result_tree.get_children()) != 401 and time.monotonic() < deadline:
                 self.root.update()

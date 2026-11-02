@@ -13,6 +13,7 @@ from tkinter import filedialog
 from localized_tk import ttk, messagebox, Toplevel
 import pve_tool as tool
 import faction_options
+import edtools_snapshot
 from powerplay_tool import POWERS, POWER_LABELS, normalize_power
 
 NOTE_CN = '候选地点不保证实时任务。配对与 RES/CNB 数据来自 EDTools；非无政府小派系数量仅估计可能发任务的派系。星环视为推定 RES，不推定 Low；明确无环视为无 RES，CNB 独立判断；数据缺失仍为情况未知。请在游戏中确认 BGS、声望和任务。'
@@ -86,6 +87,78 @@ def open_window(app):
         '最少任务派系数为0：保留任务结果并补充 RES 星系；1–8：仅检索海盗任务。0时来源条件停用但保留。',
     ))
     ttk.Label(form, textvariable=faction_feedback, style='Muted.TLabel').pack(fill='x', padx=8)
+    catalog_bar = ttk.Frame(form, padding=(8, 4))
+    catalog_bar.pack(fill='x')
+    catalog_text = tk.StringVar(win, value='正在检查 EDTools 清单…')
+    catalog_state = dict(busy=False, result=None, metadata=None)
+    ttk.Label(catalog_bar, textvariable=catalog_text, wraplength=650).pack(side='left', fill='x', expand=True)
+
+    def render_catalog():
+        tr = app.localizer.tr
+        metadata = catalog_state['metadata']
+        text = tr('EDTools：内置默认清单，可手动更新')
+        if metadata:
+            source = tr('内置清单') if metadata.get('bundled_at') else tr('用户更新清单')
+            stamp = metadata.get('retrieved_at')
+            date = datetime.fromtimestamp(stamp).isoformat(timespec='seconds') if stamp else '-'
+            text = f"EDTools: {source} · {tr('最近下载时间（本地）')}: {date}"
+        result = catalog_state['result'] or {}
+        status_key = result.get('status')
+        labels = dict(available='EDTools 有新清单，等待确认更新', unchanged='EDTools 清单内容未变化',
+                      failed='EDTools 更新检查失败；仍使用已有清单', recent='24 小时内已获取或检查清单，暂不重复联网',
+                      missing='未找到有效 EDTools 清单，可点击更新下载', installed='EDTools 清单已更新',
+                      checking='正在检查 EDTools 清单…', installing='正在更新 EDTools 清单…')
+        if status_key in labels:
+            text += '\n' + tr(labels[status_key])
+        catalog_text.set(text)
+
+    def catalogue_action(action='check', force=False, expected=None):
+        if catalog_state['busy']:
+            return
+        catalog_state['busy'] = True
+        catalog_state['result'] = dict(status='installing' if action == 'update' else 'checking')
+        for button in (catalog_check_button, catalog_update_button):
+            button.configure(state='disabled')
+        render_catalog()
+
+        def work():
+            try:
+                if action == 'update':
+                    edtools_snapshot.update(expected)
+                    result = dict(status='installed')
+                else:
+                    result = edtools_snapshot.check(force=force)
+                snapshot = edtools_snapshot.active_snapshot()
+                metadata = ({key: snapshot.get(key) for key in ('installed_at', 'bundled_at', 'generation')}
+                            if snapshot else None)
+                if metadata is not None:
+                    metadata['retrieved_at'] = max((record['fetched_at'] for record in
+                        snapshot.get('resources', {}).values()), default=snapshot.get('installed_at', 0))
+            except Exception as exc:
+                result, metadata = dict(status='failed', error=str(exc)), None
+
+            def show():
+                catalog_state.update(busy=False, result=result)
+                if metadata is not None:
+                    catalog_state['metadata'] = metadata
+                for button in (catalog_check_button, catalog_update_button):
+                    button.configure(state='normal')
+                render_catalog()
+                if result['status'] == 'available':
+                    if messagebox.askyesno('EDTools 清单更新',
+                            '发现 EDTools 新清单。现在更新本地清单？不会改变正在进行的查询；之后的查询使用新版。', parent=win):
+                        catalogue_action('update', expected=result['generation'])
+                elif result['status'] == 'failed' and (force or action == 'update'):
+                    messagebox.showerror('EDTools 清单更新', result.get('error', ''), parent=win)
+            app._post(win, show)
+        threading.Thread(target=work, daemon=True).start()
+
+    catalog_check_button = ttk.Button(catalog_bar, text='检查 EDTools 更新',
+                                      command=lambda: catalogue_action(force=True))
+    catalog_check_button.pack(side='left', padx=4)
+    catalog_update_button = ttk.Button(catalog_bar, text='更新 EDTools 清单',
+                                       command=lambda: catalogue_action('update'))
+    catalog_update_button.pack(side='left', padx=4)
     status = tk.StringVar(win, value='半径针对任务来源星系；0 不限制距离。有环推定 RES；情况未知单独标注，不作为无 RES 的证据。')
     ttk.Label(win, textvariable=status, wraplength=1360).pack(fill='x', padx=8, pady=4)
     progress = ttk.Progressbar(win, mode='indeterminate')
@@ -183,7 +256,7 @@ def open_window(app):
     def use_online():
         state.update(page=None, rows=[], info=None)
         tree.delete(*tree.get_children())
-        status.set('已切换在线数据；点击开始查询。')
+        status.set('已切换本地 EDTools 清单；动态资料仍按需联网。')
 
     def open_page():
         try:
@@ -296,7 +369,7 @@ def open_window(app):
     import_button.pack(side='left', padx=8)
     page_button = ttk.Button(actions, text='打开 PvE 网页', command=open_page)
     page_button.pack(side='left')
-    online_button = ttk.Button(actions, text='使用在线数据', command=use_online)
+    online_button = ttk.Button(actions, text='使用 EDTools 清单', command=use_online)
     online_button.pack(side='left', padx=8)
     footer = ttk.Frame(win, padding=8)
     footer.pack(side='bottom', fill='x', before=frame)
@@ -304,7 +377,7 @@ def open_window(app):
     ttk.Button(footer, text='复制目标星系', command=copy_target).pack(side='left', padx=8)
     ttk.Button(footer, text='复制任务来源星系', command=lambda: copy_system(0)).pack(side='left', padx=8)
     ttk.Button(footer, text='复制来源空间站', command=lambda: copy_result(win, tree, 'source_station')).pack(side='left', padx=8)
-    refresh_button = ttk.Button(footer, text='刷新数据并查询', command=lambda: run(refresh=True))
+    refresh_button = ttk.Button(footer, text='刷新动态资料并查询', command=lambda: run(refresh=True))
     refresh_button.pack(side='left', padx=8)
     ttk.Button(footer, text='检索说明', command=lambda: messagebox.showinfo('检索说明',
         NOTE_CN + '\n\n' + '\n'.join((state['info'] or {}).get('notes', [])) + '\n\n'
@@ -334,6 +407,9 @@ def open_window(app):
     win.result_tree, win.search_state = tree, state
     win.faction_boxes, win.faction_feedback = faction_boxes, faction_feedback
     win.criteria, win.control_widgets = criteria, control_widgets
+    win.catalog_state, win.catalog_action = catalog_state, catalogue_action
+    app.localizer.register(render_catalog)
+    catalogue_action()
     def dispose(event):
         if event.widget is win:
             # Debug/accessor attributes must not leave window -> child -> window
@@ -344,5 +420,7 @@ def open_window(app):
             win.criteria = win.control_widgets = None
             win.result_tree = win.search_state = win.faction_feedback = None
             win.session_variables = {}
+            app.localizer.callbacks.discard(render_catalog)
+            win.catalog_action = win.catalog_state = None
     win.bind('<Destroy>', dispose, add='+')
     return win

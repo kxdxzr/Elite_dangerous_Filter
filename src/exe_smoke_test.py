@@ -13,11 +13,17 @@ def run(gui, report_path):
         import field_options as fo
         import powerplay_gui
         import rare_goods
+        import edtools_snapshot
         from runtime_paths import data_directory
 
         # 只验证加载和控件，不发起网络查询。
         fo.prefetch_common = lambda *args, **kwargs: None
         fo.get_options = lambda kind, field: list(fo.BUNDLED_OPTIONS.get(f"{kind}/{field}", []))
+        edtools_snapshot.check = lambda **kwargs: dict(status='recent')
+        baseline = edtools_snapshot.read('bundled')
+        assert baseline is not None, 'Bundled EDTools catalogue is missing or invalid'
+        catalogue_counts = {url: len(record['data']) for url, record in baseline['resources'].items()}
+        assert all(catalogue_counts.values())
         root = gui.tk.Tk()
         root.withdraw()
         callback_errors = []
@@ -53,6 +59,10 @@ def run(gui, report_path):
         assert not hge.session_variables['require_manufactured_trader'].get()
         assert not hasattr(hge, 'export_csv')
         shopping = app.engineer_shopping_window()
+        waypoint = app.waypoint_route_window()
+        assert waypoint.title() == '多目标途经规划'
+        from route_geometry import Envelope
+        assert Envelope((0, 0, 0), (10, 0, 0), 12).contains((5, 0, 0))
         assert 'assume_max_rank' not in shopping.session_variables
         assert any(value.startswith('Jerome Archer') for value in shopping.pledged_power_box['values'])
         outfitting = app.full_outfitting_window()
@@ -115,6 +125,10 @@ def run(gui, report_path):
         app._result_kind = 'stations'
         app._result_conditions = [dict(field='distance_to_arrival', op='<', text=100)]
         app.render_main_results()
+        app._append_main_results([dict(name='Streamed', system_name='Sol', distance_to_arrival=15)])
+        assert len(app.tree.get_children()) == 3
+        app.results.pop()
+        app.render_main_results()
         app.tree.sort_by('value_2')
         assert app.tree.set(app.tree.get_children()[0], 'name') == 'Shop 2'
         assert app.results[0]['name'] == 'Shop 10'
@@ -176,6 +190,7 @@ def run(gui, report_path):
             licence = Path(sys._MEIPASS) / 'LICENSE'
             assert 'GNU GENERAL PUBLIC LICENSE' in licence.read_text(encoding='utf-8')
         report.update(ok=True, version=PROJECT_VERSION, shopping_items=len(shopping.purchase_rows),
+                      edtools_catalogue=catalogue_counts, waypoint_window=True, incremental_results=True,
                       display=dict(dpi_awareness=awareness, pixels_per_inch=round(root.winfo_fpixels('1i'), 2),
                                    ui_font_family=root.tk.call('font', 'actual', 'TkDefaultFont', '-family')),
                       appearance_modes=['system', 'light', 'dark'],

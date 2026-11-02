@@ -1107,6 +1107,7 @@ class App:
         ttk.Button(route_bar, text='工程师途中采购', command=self.engineer_shopping_window).pack(side='left', padx=4)
         ttk.Button(route_bar, text='查找满配件空间站', command=self.full_outfitting_window).pack(side='left', padx=4)
         ttk.Button(route_bar, text='HGE 可能星系查找器', command=self.hge_window).pack(side='left', padx=4)
+        ttk.Button(route_bar, text='多目标途经规划', command=self.waypoint_route_window).pack(side='left', padx=4)
         from release_updates import UpdateChecker, should_auto_check
         self.update_button = ttk.Button(route_bar, text='检查更新', command=lambda: self.update_checker.check())
         self.update_button.pack(side='right', padx=4)
@@ -1401,6 +1402,15 @@ class App:
         for values in records:
             self.tree.insert('', 'end', values=values)
 
+    def _append_main_results(self, rows):
+        """Main-thread only: append verified rows without rebuilding the table."""
+        from main_csv import export_table
+        self.results.extend(rows)
+        _, records = export_table(rows, self._result_kind, self._result_conditions,
+                                  self.localizer.language, self.localizer.tr)
+        for values in records:
+            self.tree.insert('', 'end', values=values)
+
     def bind_tool_state(self, key, window, variables, before_collect=None):
         """统一保存辅助窗口；关子窗口和关主窗口都能保存当前参数。"""
         saved = self._tool_states.get(key, {})
@@ -1524,6 +1534,26 @@ class App:
             self.tree.delete(*self.tree.get_children())
         self._result_conditions = conds
         self._result_kind = kind
+        self.render_main_results()
+        search_stop = self._stop
+        pending_results, pending_lock = [], threading.Lock()
+        delivery = {'queued': False}
+
+        def drain_results():
+            with pending_lock:
+                batch = pending_results[:]
+                pending_results.clear()
+                delivery['queued'] = False
+            if self._stop is search_stop:
+                self._append_main_results(batch)
+
+        def receive_results(batch):
+            with pending_lock:
+                pending_results.extend(batch)
+                if delivery['queued']:
+                    return
+                delivery['queued'] = True
+            self._post(self.root, drain_results)
         if not hasattr(self, '_search_progress'):
             self._search_progress = SearchProgress(self.prog, self.prog_pct, self.localizer)
         self._search_progress.begin(continuing)
@@ -1537,8 +1567,8 @@ class App:
                     progress=lambda msg, info=None: self._post(
                         self.root, self._apply_progress, msg, info or {}),
                     corrections=corr,
-                    stop=self._stop, notes=notes, resume=self._main_checkpoint)
-                self.results = rows
+                    stop=search_stop, notes=notes, resume=self._main_checkpoint,
+                    on_results=receive_results)
                 # 反哺规格学习库: 结果行里的在售条目自带 (name, class, rating)
                 for r in rows:
                     fo.learn_module_specs(r.get("modules"))
@@ -1561,6 +1591,9 @@ class App:
                     dconds = conds
 
                 def show():
+                    if self._stop is not search_stop:
+                        return
+                    self.results = list(rows)
                     for old, new in corr:
                         for rr in self.rows:
                             if not rr.frame.winfo_exists():
@@ -1693,6 +1726,10 @@ class App:
 
     def engineer_shopping_window(self):
         from engineer_shopping_gui import open_window
+        return open_window(self)
+
+    def waypoint_route_window(self):
+        from waypoint_route_gui import open_window
         return open_window(self)
 
     def hge_window(self):

@@ -2,6 +2,8 @@
 
 English · [简体中文](README_zh-CN.md) · [Releases](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
+> **Prerelease: [v0.1.5-beta](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/tag/v0.1.5-beta)** — waypoints, bundled/user-updatable EDTools data, HGE candidates, tighter route bounds and incremental verified results. [Notes and limitations](docs/releases/v0.1.5-beta.md). Latest stable remains v0.1.4-r1.
+
 ![Elite Dangerous Filter: combine filters, plan equipment shopping and find your next destination](docs/social-preview.png)
 
 **Your conditions. The right destination.** A desktop tool for finding Elite Dangerous systems and stations using [Spansh](https://spansh.co.uk/) and other public data.
@@ -10,7 +12,7 @@ Combine distance and planet filters, find a station for your equipment list, or 
 
 ## Download and quick start
 
-Development source adds [GitHub Release detection and confirmed automatic EXE replacement](docs/release-updates.md). Windows builds download and verify SHA256, then save conditions, exit, replace and restart with an old-EXE backup. Source runs or missing verification metadata fall back to the release page. Not included in the published v0.1.4-r1.
+v0.1.5-beta adds [GitHub Release detection and confirmed automatic EXE replacement](docs/release-updates.md). Windows builds download and verify SHA256, then save conditions, exit, replace and restart with an old-EXE backup. Source runs or missing verification metadata fall back to the release page. Not included in the published v0.1.4-r1; automatic checks do not offer beta updates.
 
 > **v0.1.4-r1 revision:** the previously built package includes search recovery, ring/star refinements and separate weapon mounts. **HGE and the later Copy engineer system button remain development-source additions, not part of this release.** Read the [release notes and validation limitations](docs/releases/v0.1.4-r1.md).
 
@@ -72,6 +74,10 @@ Unlike a multi-select OR filter, the shopping list requires all requested items 
 </details>
 
 ### Choose a destination for your next activity
+
+- **EDTools catalogue (development source):** a bundled full pair/RES baseline with local searches, background conditional update checks and user-confirmed updates. Dynamic BGS data still refreshes separately. See [catalogue behavior](docs/edtools-catalogue.md).
+
+- **Multi-objective waypoint planner (development source):** capture up to six independent condition groups, choose A and B, then minimize extra stops before geometric distance within a detour limit. Same-station requirements can share a stop. Optimal only within queried candidates; not jump navigation. See [usage and limitations](docs/waypoint-route.md).
 
 - **Colonisation candidates:** shortlist zero-population, explicitly permit-free, station-free systems by region, nearby populated space, value, planets and rings. A candidate is not a guarantee that the system is claimable.
 - **Pirate hunting (testing):** combine EDTools mission pairs and site records with Spansh factions, controlling Power, source-station access and target rings. Set the minimum mission-faction count to 0 to also search for RES systems outside the mission-pair catalogue. This is not a live mission board.

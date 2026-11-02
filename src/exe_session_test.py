@@ -13,6 +13,8 @@ ROWS = [
     dict(type="distance", ref="", min="unfinished", max="", mode="范围外"),
 ]
 TOOLS = {
+    'waypoint_route': dict(origin='Sol', destination='Alpha Centauri', max_extra_ly='25',
+                           candidates_per_group='6', max_pages='3', groups='[]'),
     'hge': dict(reference='Leesti', radius='80', material='proto_radiolic', population='至少 1 亿',
                 freshness='近 3 小时', want='25', max_pages='7', require_manufactured_trader=True),
     'full_outfitting': dict(reference='Sirius', radius='180', want='12', max_pages='3',
@@ -59,9 +61,11 @@ def run(gui, phase, report_path):
         import field_options as fo
         import powerplay_gui
         import session_store
+        import edtools_snapshot
 
         fo.prefetch_common = lambda *args, **kwargs: None
         fo.get_options = lambda kind, field: list(fo.BUNDLED_OPTIONS.get(f"{kind}/{field}", []))
+        edtools_snapshot.check = lambda **kwargs: dict(status='recent')
         root = gui.tk.Tk()
         root.withdraw()
         errors = []
@@ -84,6 +88,7 @@ def run(gui, phase, report_path):
         app.carrier_parking_window()
         app.midpoint_window()
         windows = {"rare_goods": rare, "pve": app.pve_window(),
+                    'waypoint_route': app.waypoint_route_window(),
                     'hge': app.hge_window(),
                    'engineer_shopping': app.engineer_shopping_window(),
                    'full_outfitting': app.full_outfitting_window()}

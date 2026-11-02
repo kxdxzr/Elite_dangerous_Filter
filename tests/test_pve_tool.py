@@ -130,14 +130,14 @@ class PveParserTests(unittest.TestCase):
 
     def test_download_uses_explicit_php_without_multiviews(self):
         with mock_pve_transport(return_value=io.BytesIO(html_page([candidate()]).encode())) as get:
-            parsed = pve.fetch_page(pve.Criteria(), 'Sol')
+            parsed = pve._download_page(pve.page_url(pve.Criteria(), 'Sol'))
         self.assertEqual(len(parsed['rows']), 1)
         self.assertTrue(get.call_args.args[0].full_url.startswith('https://edtools.cc/pve.php?'))
 
     def test_download_transport_does_not_capture_unrelated_background_requests(self):
         with patch.object(urllib.request, 'urlopen') as unrelated, \
                 mock_pve_transport(return_value=io.BytesIO(html_page([candidate()]).encode())) as get:
-            parsed = pve.fetch_page(pve.Criteria(), 'Sol')
+            parsed = pve._download_page(pve.page_url(pve.Criteria(), 'Sol'))
             urllib.request.urlopen('https://example.invalid/unrelated')
         self.assertEqual(len(parsed['rows']), 1)
         get.assert_called_once()
@@ -148,7 +148,7 @@ class PveParserTests(unittest.TestCase):
         error = urllib.error.HTTPError(pve.BASE, 406, 'Not Acceptable', {}, None)
         with mock_pve_transport(side_effect=error):
             with self.assertRaises(pve.PageDownloadError) as caught:
-                pve.fetch_page(pve.Criteria(reference='slo'), 'Sol')
+                pve._download_page(pve.page_url(pve.Criteria(reference='slo'), 'Sol'))
         self.assertEqual(caught.exception.code, 406)
         self.assertIn('s=Sol', caught.exception.url)
         self.assertIn('import', str(caught.exception))

@@ -533,14 +533,14 @@ def _neighbours_batch(systems, criteria, stop):
     return results
 
 
-def search(criteria, progress=None, stop=None, refresh=False, resume=None):
+def search(criteria, progress=None, stop=None, refresh=False, resume=None, on_results=None):
     import json
     import search_recovery
     if resume is not None:
         search_recovery.bind(resume, json.dumps(vars(criteria.validate()), sort_keys=True))
     try:
         with eng.request_control.context(stop, lambda text: eng._report(progress, text, stage='网络冷却', done=0, work_total=None)):
-            result = _search(criteria, progress, stop, refresh, resume)
+            result = _search(criteria, progress, stop, refresh, resume, on_results)
     except Exception as error:
         if isinstance(error, InterruptedError) and resume is not None and stop is not None and stop.is_set():
             result = (dict(scanned=resume.get('display_scanned', 0), total=resume.get('total', 0),
@@ -565,7 +565,7 @@ def search(criteria, progress=None, stop=None, refresh=False, resume=None):
     return result
 
 
-def _search(criteria, progress=None, stop=None, refresh=False, resume=None):
+def _search(criteria, progress=None, stop=None, refresh=False, resume=None, on_results=None):
     c = criteria.validate()
     if stop is not None and stop.is_set():
         return dict(scanned=0, total=0, complete=False, unknown=0,
@@ -582,6 +582,16 @@ def _search(criteria, progress=None, stop=None, refresh=False, resume=None):
     if c.reference:
         canonical, reference_coords, _ = eng.resolve_ref(c.reference)
         payload['reference_system'] = canonical
+    def cheap_candidate(system):
+        if c.minimum_value is not None:
+            value = number(system.get(c.value_field))
+            if value is None or value <= c.minimum_value:
+                return False
+        if c.radius is not None:
+            xyz = tuple(number(system.get(axis)) for axis in ('x', 'y', 'z'))
+            if None in xyz or eng.dist3(xyz, reference_coords) > c.radius:
+                return False
+        return True
     rows = resume.setdefault('rows', []) if resume is not None else []
     seen = set(resume.get('seen', ())) if resume is not None else set()
     scanned, unknown = (resume.get('scanned', 0), resume.get('unknown', 0)) if resume is not None else (0, 0)
@@ -631,7 +641,8 @@ def _search(criteria, progress=None, stop=None, refresh=False, resume=None):
                 resume['total'] = total
             missing_stations = [s['name'] for s in candidates if isinstance(s, dict) and s.get('name')
                                 and number(s.get('population')) == 0 and s.get('needs_permit') is False
-                                and 'stations' not in s and not eng.is_excluded_system('systems', s)]
+                                and 'stations' not in s and not eng.is_excluded_system('systems', s)
+                                and s.get('id64', s['name'].casefold()) not in seen and cheap_candidate(s)]
             confirmed = {}
             for start in range(0, len(missing_stations), 16):
                 eng._report(progress, 'Verifying station records', stage='站点复核',
@@ -750,6 +761,8 @@ def _search(criteria, progress=None, stop=None, refresh=False, resume=None):
                 if row_ident not in emitted:
                     rows.append(row)
                     emitted.add(row_ident)
+                    if on_results is not None:
+                        on_results([copy.deepcopy(row)])
                 verified = scanned - len(accepted) + index + 1
                 if len(rows) >= c.want:
                     reason = 'Result limit reached; results are incomplete.'

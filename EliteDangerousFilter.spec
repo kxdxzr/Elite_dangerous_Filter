@@ -21,14 +21,16 @@ a = Analysis(
     [str(project / "src" / "filter_gui.py")],
     pathex=[str(project / "src")],
     binaries=[],
-    datas=[(str(project / "LICENSE"), ".")],
+    datas=[(str(project / "LICENSE"), "."),
+           (str(project / 'assets' / 'edtools' / 'default.json'), 'assets/edtools')],
     hiddenimports=["powerplay_gui", "powerplay_tool", "rare_goods", "exe_smoke_test", "exe_session_test",
                    "pve_gui", "pve_tool", "pve_access", "pve_cache", "res_systems", "faction_options", "i18n", "localized_tk",
                    "colonisation_gui", "colonisation_tool", "main_system_gui", "system_filters", "system_filter_fields",
                      "rare_neutron", "result_copy", "result_format", "search_progress", "export_metadata",
                      "engineer_shopping_gui", "engineer_shopping", "form_scroll",
                       "full_outfitting_gui", "full_outfitting", "outfitting_catalog", "outfitting_identity", "catalog_updates",
-                        "outfitting_snapshot", "hge_gui", "hge_tool", "translations"] + [
+                         "outfitting_snapshot", "hge_gui", "hge_tool", "edtools_snapshot",
+                         "waypoint_route", "waypoint_route_gui", "route_geometry", "translations"] + [
         "translations." + path.stem for path in (project / "src" / "translations").glob("*.py")
         if path.stem != "__init__"
     ],

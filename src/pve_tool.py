@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 import urllib.error
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import dataclass, replace
 from html.parser import HTMLParser
@@ -19,6 +20,7 @@ from html import unescape
 import filter_engine as eng
 import pve_cache
 import pve_access
+import edtools_snapshot
 
 # Explicit resource avoids Apache MultiViews negotiating pve.json vs pve.php.
 BASE = 'https://edtools.cc/pve.php'
@@ -177,20 +179,14 @@ def page_url(criteria, reference=None):
 
 
 def fetch_page(criteria, reference, refresh=False):
-    if criteria.radius == 0 or criteria.radius > 250:
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            if refresh:
-                pairs = pool.submit(fetch_dataset, PAIRS_URL, True)
-                sites = pool.submit(fetch_dataset, SITES_URL, True)
-            else:
-                pairs = pool.submit(fetch_dataset, PAIRS_URL)
-                sites = pool.submit(fetch_dataset, SITES_URL)
-            page = dataset_page(pairs.result(), sites.result(), reference, eng.get_system_coords(reference))
+    # All radii use the complete manual snapshot, not radius-specific HTML.
+    # refresh only refreshes dynamic data; EDTools installation is explicit.
+    import edtools_snapshot
+    with edtools_snapshot.scope():
+        pairs, sites = fetch_dataset(PAIRS_URL), fetch_dataset(SITES_URL)
+        page = dataset_page(pairs, sites, reference, eng.get_system_coords(reference))
         page['cache'] = [dataset_cache_info(url) for url in (PAIRS_URL, SITES_URL)]
         return page
-    url = page_url(criteria, reference)
-    parsed, metadata = pve_cache.cached('page:' + url, lambda: _download_page(url), 3600, refresh)
-    return dict(parsed, cache=[dict(metadata, url=url)])
 
 
 def _download_page(url):
@@ -206,16 +202,19 @@ def _download_page(url):
     return parse_page(body.decode('utf-8-sig'))
 
 
-_dataset_metadata = {}
+_dataset_metadata = threading.local()
 
 
 def dataset_cache_info(url):
-    return dict(_dataset_metadata.get(url, {}), url=url)
+    return dict(getattr(_dataset_metadata, 'records', {}).get(url, {}), url=url)
 
 
 def fetch_dataset(url, refresh=False):
-    value, metadata = pve_cache.cached('dataset:' + url, lambda: _download_dataset(url), 3600, refresh)
-    _dataset_metadata[url] = metadata
+    import edtools_snapshot
+    value, metadata = edtools_snapshot.get(url)
+    if not hasattr(_dataset_metadata, 'records'):
+        _dataset_metadata.records = {}
+    _dataset_metadata.records[url] = metadata
     return value
 
 
@@ -229,7 +228,10 @@ def _download_dataset(url):
         raise PageDownloadError(exc.code, request.full_url) from exc
     if len(body) > 64 * 1024 * 1024:
         raise ValueError('EDTools JSON exceeds 64 MiB; dataset completeness is unverified.')
-    data = json.loads(body.decode('utf-8-sig'))
+    return validate_dataset(url, json.loads(body.decode('utf-8-sig')))
+
+
+def validate_dataset(url, data):
     if not isinstance(data, dict) or not data:
         raise ValueError('EDTools catalogue missing or invalid; not cached.')
     for name, record in data.items():
@@ -494,6 +496,7 @@ def equal(actual, requested):
     return str(actual or '').strip().casefold() == requested.strip().casefold()
 
 
+@edtools_snapshot.query_scope
 def search(criteria, *, page=None, page_loader=fetch_page, details_loader=system_details,
             resolver=eng.resolve_ref, stop=None, progress=None, refresh=False, workers=None,
             controller_loader=None, power_loader=None, ring_loader=None,

@@ -7,6 +7,7 @@ import filter_engine as eng
 import pve_access
 import pve_cache
 import pve_tool as pve
+import edtools_snapshot
 
 
 def annotate_source_controllers(rows, info, *, details_loader=pve.system_details,
@@ -177,6 +178,7 @@ def candidate_systems(criteria, reference, stop=None, refresh=False, progress=No
     return pve_cache.cached(key, load, 300, refresh)[0]
 
 
+@edtools_snapshot.query_scope
 def search(criteria, *, resolver=eng.resolve_ref, stop=None, progress=None, refresh=False,
            ring_loader=None, systems_loader=None, dataset_loader=None):
     criteria.validate()

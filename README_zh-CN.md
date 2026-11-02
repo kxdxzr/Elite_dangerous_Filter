@@ -2,6 +2,8 @@
 
 [English](README.md) · 简体中文 · [发行版本](https://github.com/kxdxzr/Elite_dangerous_Filter/releases)
 
+> **测试版：[v0.1.5-beta](https://github.com/kxdxzr/Elite_dangerous_Filter/releases/tag/v0.1.5-beta)** — 新增途经规划、本地可更新 EDTools 清单、HGE 候选、路线范围收紧和核实结果增量显示。[功能及限制](docs/releases/v0.1.5-beta.md)。最新正式版仍为 v0.1.4-r1。
+
 ![Elite Dangerous Filter：组合条件筛选、装备采购与活动选址](docs/social-preview-zh.png)
 
 **组合你的条件，找到合适的目的地。** 基于 [Spansh](https://spansh.co.uk/) 等公开数据的 Elite Dangerous 星系与空间站筛选桌面工具。
@@ -10,7 +12,7 @@
 
 ## 下载与快速开始
 
-开发源码新增：[GitHub Release 检测与确认后自动替换更新](docs/release-updates.md)。Windows EXE 支持下载、SHA256 校验、保存条件后退出替换并重启，保留旧 EXE 备份；源码运行或缺少校验证据时改为打开发布页。不包含在已发布的 v0.1.4-r1 中。
+v0.1.5-beta 新增：[GitHub Release 检测与确认后自动替换更新](docs/release-updates.md)。Windows EXE 支持下载、SHA256 校验、保存条件后退出替换并重启，保留旧 EXE 备份；源码运行或缺少校验证据时改为打开发布页。不包含在已发布的 v0.1.4-r1 中；自动检查不提供 beta 更新。
 
 > **v0.1.4-r1 修订版：**使用此前已打包的版本，包含中断恢复、星环／恒星筛选调整和独立支架选择。**HGE 与后来新增的“复制工程师星系名”按钮仅留在开发源码，不属于本次发行。**请先阅读[修订说明及验证限制](docs/releases/v0.1.4-r1.md)。
 
@@ -74,6 +76,10 @@ certutil -hashfile EliteDangerousFilter.exe SHA256
 </details>
 
 ### 为下一次活动选个好去处
+
+- **EDTools 清单（开发源码）：**内置完整配对／RES 清单，本地查询不再按小时重新下载；进入海盗工具后台检查变化，用户确认后更新，动态 BGS 资料仍单独刷新。参见[本地清单说明](docs/edtools-catalogue.md)。
+
+- **多目标途经规划（仅开发源码）：**从主界面添加最多六组独立条件，规划 A 到 B 之间分别满足各组要求的地点。优先最少额外停靠，其次最短几何路程，支持绕路上限与同站合并。仅对本次候选集优化，不是逐跳导航。参见[用法与限制](docs/waypoint-route.md)。
 
 - **殖民候选：**按区域、附近有人星系、价值、天体与星环，筛选零人口、明确免许可、无站点的星系。候选不等于一定可认领。
 - **海盗任务选址（测试中）：**把 EDTools 任务配对与地点记录，和 Spansh 派系、控制 Power、来源站通达性及目标星环结合。最少任务派系数设为 0 时，还可检索任务配对清单以外的 RES 星系；不读取实时任务板。

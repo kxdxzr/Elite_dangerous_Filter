@@ -87,22 +87,25 @@ def prepare(rows, conditions, *, stop=None, max_pages=25, progress=None, body_re
         row.pop('_system_details', None)
         for key in fields:
             row[key] = None  # Never trust a server-provided value for derived fields.
+    if fields & FACTION_FIELDS:
+        for row in rows:
+            counts = faction_counts(row)
+            row.update({key: counts[key] for key in fields & FACTION_FIELDS})
+    faction_conditions = [c for c in conditions if c.get('field') in fields & FACTION_FIELDS]
+    count_rows = [row for row in rows if all(bodies.eng.match_field('systems', row, c)
+                                           for c in faction_conditions)]
     if fields & STATION_COUNT_FIELDS.keys():
-        missing = [r['name'] for r in rows if 'stations' not in r and r.get('name')]
+        missing = [r['name'] for r in count_rows if 'stations' not in r and r.get('name')]
         confirmed = {}
         for start in range(0, len(missing), 16):
             bodies.check_stop(stop)
             confirmed.update(bodies.confirm_station_absence(missing[start:start + 16], stop=stop))
-        for row in rows:
+        for row in count_rows:
             stations = confirmed.get(row.get('name', '').casefold(), row.get('stations'))
             if not isinstance(stations, list) or any(not isinstance(s, dict) for s in stations):
                 continue
             values = station_groups.counts(stations)
             row.update({key: values[key] for key in fields & STATION_COUNT_FIELDS.keys()})
-    if fields & FACTION_FIELDS:
-        for row in rows:
-            counts = faction_counts(row)
-            row.update({key: counts[key] for key in fields & FACTION_FIELDS})
     count_conditions = [c for c in conditions if c.get('field') in fields]
     detail_rows = [row for row in rows if all(bodies.eng.match_field('systems', row, c) for c in count_conditions)]
     detail_ids = {id(row) for row in detail_rows}
@@ -117,6 +120,13 @@ def prepare(rows, conditions, *, stop=None, max_pages=25, progress=None, body_re
             if progress:
                 progress()
     full_bodies = {}
+    # Every detail condition is required (AND). A failed or unknown station
+    # requirement cannot become a hit after loading bodies or neighbours.
+    detail_rows = [row for row in detail_rows if all(
+        station_groups.match_groups(full_stations.get(row.get('name', '').casefold()),
+                                    c['station_groups'], c['station_mode'])[0] is True
+        for c in specs)]
+    detail_ids = {id(row) for row in detail_rows}
     if any(c['body_groups'] or c['ring_groups'] for c in specs):
         names = sorted({r['name'] for r in detail_rows if r.get('name')}, key=str.casefold)
         chunks = [names[i:i + 8] for i in range(0, len(names), 8)]
@@ -135,18 +145,23 @@ def prepare(rows, conditions, *, stop=None, max_pages=25, progress=None, body_re
             continue
         records = full_bodies.get(row.get('name', '').casefold(), [])
         bodies.annotate_relationships(records)
+        group_results = [(bodies.match_groups(records, c['body_groups'], c['body_mode']),
+                          bodies.match_groups(records, c['ring_groups'], c['ring_mode'], rings=True))
+                         for c in specs]
+        local_ready = all(bodies.combine([body[0], ring[0]]) is True
+                          for body, ring in group_results)
         evidence = dict(counts={key: row.get(key) for key in sorted(fields)}, groups=[], neighbours=[], stations=[])
         memo = {}
-        for index, c in enumerate(specs, 1):
-            body_hit, planets = bodies.match_groups(records, c['body_groups'], c['body_mode'])
-            ring_hit, rings = bodies.match_groups(records, c['ring_groups'], c['ring_mode'], rings=True)
+        for index, (c, (body_result, ring_result)) in enumerate(zip(specs, group_results), 1):
+            body_hit, planets = body_result
+            ring_hit, rings = ring_result
             values = [body_hit, ring_hit]
             station_hit, matches = station_groups.match_groups(
                 full_stations.get(row.get('name', '').casefold()), c['station_groups'], c['station_mode'])
             values.append(station_hit)
             if matches:
                 evidence['stations'].append(dict(condition=index, groups=matches))
-            if bodies.combine(values) is not False and (c['nearest_min'] is not None or c['nearest_max'] is not None):
+            if local_ready and bodies.combine(values) is True and (c['nearest_min'] is not None or c['nearest_max'] is not None):
                 key = (c['population_min'], c['nearest_max'])
                 if key not in memo:
                     memo[key] = bodies.populated_neighbour(row, c['nearest_max'], max_pages,
@@ -157,6 +172,8 @@ def prepare(rows, conditions, *, stop=None, max_pages=25, progress=None, body_re
                     evidence['neighbours'].append(dict(condition=index, population_min=c['population_min'],
                                                         name=name, population=population, distance=distance))
                 values.append(hit)
+            elif c['nearest_min'] is not None or c['nearest_max'] is not None:
+                values.append(None)  # Skipped work is not positive evidence.
             row.setdefault('_detail_outcomes', {})[signature(c)] = bodies.combine(values)
             if planets or rings:
                 evidence['groups'].append(dict(condition=index, planets=planets, rings=rings))
