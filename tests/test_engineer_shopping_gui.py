@@ -39,6 +39,45 @@ class EngineerShoppingGuiTests(unittest.TestCase):
                                max_extra_jumps='2', module='Shield Booster', module_class='0', module_rating='A').items():
             win.session_variables[key].set(value)
 
+    def test_equipment_change_resets_spec_and_mount_only_in_changed_purchase(self):
+        win = self.app.engineer_shopping_window()
+        row = win.add_purchase(dict(value='Beam Laser', module_spec='2D|Gimballed', discount='不限'))
+        other = win.add_purchase(dict(value='Plasma Accelerator', module_spec='2C'))
+        row._commit_spec()
+        other._commit_spec()
+        row.val.set('Pulse Laser')  # Even a compatible 2D mount must not carry over.
+        self.assertEqual(row.v_spec.get(), '不限')
+        self.assertEqual((row.v_class.get(), row.v_rating.get(), row._weapon_mode), ('', '', ''))
+        self.assertEqual(row.v_discount.get(), '不限')
+        self.assertEqual(other.v_spec.get(), '2C')
+        row.v_spec.set('unfinished')
+        row.val.set('Fuel Scoop')
+        self.assertEqual(row.v_spec.get(), '不限')
+        self.app.set_language('en')
+        row.v_spec.set('5A')
+        row._commit_spec()
+        row.val.set('Shield Generator')
+        self.assertEqual(row.v_spec.get(), '不限')
+        self.assertEqual(row.cb_spec._display.get(), self.app.localizer.tr('不限'))
+
+    def test_equipment_reset_does_not_erase_restored_spec_or_leak_trace(self):
+        win = self.app.engineer_shopping_window()
+        row = win.add_purchase(dict(value='Beam Laser', module_spec='2D|Gimballed'))
+        row._commit_spec()
+        row.val.set(' beam laser ')
+        self.assertEqual(row.v_spec.get(), '2D|Gimballed')
+        self.app._tool_states['engineer_shopping'] = self.app._state_dict()['tools']['engineer_shopping']
+        win.destroy()
+        restored = self.app.engineer_shopping_window()
+        row = restored.purchase_rows[1]
+        self.assertEqual(row.v_spec.get(), '2D|Gimballed')
+        row.val.set('Fuel Scoop')
+        self.assertEqual(row.v_spec.get(), '不限')
+        variable = row.val
+        restored.remove_purchase(row)
+        variable.set('Plasma Accelerator')
+        self.assertEqual(variable.trace_info(), [])
+
     def test_separate_window_carrier_toggle_localization_and_session(self):
         win = self.app.engineer_shopping_window()
         self.populate(win)

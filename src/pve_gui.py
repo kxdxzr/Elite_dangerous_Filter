@@ -49,7 +49,10 @@ def open_window(app):
              ('target_ring_max_ls', '目标星环最大距离 Ls')]
     for index, (key, label) in enumerate(specs):
         row, column = divmod(index, 5)
-        ttk.Label(controls, text=label, wraplength=250).grid(row=row * 2, column=column, sticky='w', padx=5)
+        from journal_gui import system_label
+        heading = (system_label(controls, label, variables[key]) if key == 'reference'
+                   else ttk.Label(controls, text=label, wraplength=250))
+        heading.grid(row=row * 2, column=column, sticky='w', padx=5)
         var = variables[key]
         if key == 'site_type':
             entry = ttk.Combobox(controls, textvariable=var,
@@ -292,14 +295,48 @@ def open_window(app):
         state.update(rows=[], info=None)
         tree.delete(*tree.get_children())
         status.set('查询中...')
+        token = object()
+        state['run_token'] = token
+        state['stream_failed'] = False
+        pending_rows, pending_lock = [], threading.Lock()
+        delivery = dict(queued=False)
+
+        def drain_rows():
+            with pending_lock:
+                batch = pending_rows[:200]
+                del pending_rows[:200]
+                more = bool(pending_rows)
+                delivery['queued'] = more
+            if state.get('run_token') is not token:
+                return
+            state['rows'].extend(batch)
+            for row in batch:
+                tree.insert('', 'end', values=[result_value(row, key) for key, _ in columns])
+            if not state['stream_failed']:
+                status.set(app.localizer.tr('已核实部分结果；检索仍在进行，尚非完整结果。'))
+            if more:
+                app.root.after(1, lambda: app._post(win, drain_rows))
+
+        def receive_rows(batch):
+            with pending_lock:
+                pending_rows.extend(batch)
+                if delivery['queued']:
+                    return
+                delivery['queued'] = True
+            app._post(win, drain_rows)
 
         def work():
             try:
                 info, rows = tool.search(query, page=snapshot, stop=stop, refresh=refresh,
-                    progress=lambda text: app._post(win, lambda: (status.set(text), tracker.update(text))))
+                    progress=lambda text: app._post(win, lambda: (status.set(text), tracker.update(text))),
+                    on_results=receive_rows)
 
                 def show():
+                    if state.get('run_token') is not token:
+                        return
+                    state['run_token'] = None
                     state.update(rows=rows, info=info)
+                    tree.delete(*tree.get_children())
                     faction_options.remember(row.get(key, '') for row in rows
                                              for key in ('source_controller', 'target_controller'))
                     summary = (f"参考 {info.get('reference', query.reference)}，半径 {query.radius:,.2f} ly；{info['mode']}：命中 {len(rows):,} 条；已复核 {info['scanned']:,} 条。"
@@ -325,8 +362,9 @@ def open_window(app):
             except Exception as exc:
                 download_error = isinstance(exc, tool.PageDownloadError)
                 def failed(error=str(exc), is_download=download_error,
-                           url=exc.url if download_error else None):
-                    status.set('查询失败，不能判断有无命中。可导入浏览器保存的 EDTools PvE 网页。')
+                            url=exc.url if download_error else None):
+                    state['stream_failed'] = True
+                    status.set('查询失败；保留已核实的部分结果，不能据此判断完整命中或确认没有 RES。')
                     finish()
                     if is_download:
                         prompt = ('完整数据下载失败。网页最多覆盖 250 ly，保存的 HTML 只能用于对应有限半径。是否打开网页？'

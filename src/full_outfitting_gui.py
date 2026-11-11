@@ -47,7 +47,9 @@ def open_window(app):
     win.criteria_entries = {}
     for index, (name, label) in enumerate((('reference', '参考星系'), ('radius', '半径 ly'),
                                           ('want', '最多结果'), ('max_pages', '最多页数'))):
-        ttk.Label(controls, text=label).grid(row=0, column=index, sticky='w', padx=4)
+        from journal_gui import system_label
+        heading = system_label(controls, label, variables[name]) if name == 'reference' else ttk.Label(controls, text=label)
+        heading.grid(row=0, column=index, sticky='w', padx=4)
         if name == 'reference':
             entry = ttk.Combobox(controls, textvariable=variables[name], width=28)
             attach_system_suggest(entry, variables[name])

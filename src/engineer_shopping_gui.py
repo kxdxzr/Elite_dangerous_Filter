@@ -56,7 +56,10 @@ def open_window(app):
                                          ('landing_pad', '采购站停机坪（可停靠船型）'),
                                          ('pledged_power', '效忠 Power（个人优惠）'))):
         grid_row, grid_column = divmod(index, 3)
-        ttk.Label(route, text=title, wraplength=110).grid(
+        from journal_gui import system_label
+        heading = (system_label(route, title, variables[key]) if key == 'origin'
+                   else ttk.Label(route, text=title, wraplength=110))
+        heading.grid(
             row=grid_row, column=grid_column * 2, sticky='w', padx=4)
         if key == 'destination':
             destination_cell = ttk.Frame(route)
@@ -161,6 +164,25 @@ def open_window(app):
             apply_purchase(row, saved)
         else:
             row.refresh_options()
+        last_name = [row.val.get().strip().casefold()]
+
+        def equipment_changed(*args):
+            name = row.val.get().strip().casefold()
+            if name == last_name[0]:
+                return
+            last_name[0] = name
+            row.v_class.set('')
+            row.v_rating.set('')
+            row._weapon_mode = ''
+            row._sync_spec_display()
+
+        name_trace = row.val.trace_add('write', equipment_changed)
+
+        def dispose_name_trace(event):
+            if event.widget is row.frame:
+                row.val.trace_remove('write', name_trace)
+
+        row.frame.bind('<Destroy>', dispose_name_trace, add='+')
         bind_first_row()
         return row
 

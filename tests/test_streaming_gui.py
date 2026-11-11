@@ -98,3 +98,35 @@ class StreamingGuiTests(unittest.TestCase):
             self.release.set()
             self.pump_until(lambda: str(button['state']) == 'normal')
             self.assertEqual(len(tree.get_children()), 1)
+
+    def test_pve_streams_before_return_then_reconciles_sorted_rows(self):
+        import edtools_snapshot as store
+        import pve_tool as pve
+        from test_pve_tool import candidate
+        rows = [dict(candidate(str(i)), site='RES Low', site_evidence='res') for i in range(450)]
+        def search(*args, on_results, **kwargs):
+            try:
+                on_results(rows)
+                self.release.wait(4)
+                return dict(reference='Sol', mode='RES', scanned=450, complete=True,
+                            notes=[], errors=[]), list(reversed(rows))
+            finally:
+                self.finished.set()
+        with patch.object(store, 'check', return_value=dict(status='recent')), \
+                patch.object(pve, 'search', side_effect=search):
+            win = self.app.pve_window()
+            def descendants(widget):
+                for child in widget.winfo_children():
+                    yield child
+                    yield from descendants(child)
+            button = next(w for w in descendants(win) if isinstance(w, self.gui.ttk.Button)
+                          and w.cget('text') == '开始查询')
+            button.invoke()
+            self.pump_until(lambda: len(win.result_tree.get_children()) > 0)
+            self.assertFalse(self.finished.is_set())
+            self.assertIsNone(win.search_state['info'])
+            self.release.set()
+            self.pump_until(lambda: str(button['state']) == 'normal')
+            self.assertEqual(len(win.result_tree.get_children()), 450)
+            self.assertEqual(win.search_state['rows'], list(reversed(rows)))
+            self.assertEqual(win.result_tree.item(win.result_tree.get_children()[0], 'values')[0], '449')

@@ -409,6 +409,8 @@ class Row:
             self.ref = tk.StringVar(value="Sol")
             self.cb_ref = ttk.Combobox(self.frame, textvariable=self.ref, width=16)
             self.cb_ref.pack(side="left", padx=2)
+            from journal_gui import current_system_button
+            current_system_button(self.frame, self.ref, on_filled=self._journal_reference).pack(side='left', padx=2)
             self.cb_ref.bind("<KeyRelease>", self._on_ref_key)
             self._ref_seq = 0
             self.cb_ref.bind("<<ComboboxSelected>>",
@@ -494,6 +496,18 @@ class Row:
             self.refresh_options()
         ttk.Button(self.controls if self.type == 'field' else self.frame, text="删除", width=6,
                    command=self.destroy).pack(side="right")
+
+    def _journal_reference(self, location):
+        self._ref_vseq = getattr(self, '_ref_vseq', 0) + 1
+        self._ref_seq += 1
+        if getattr(self, '_ref_timer', None):
+            self.frame.after_cancel(self._ref_timer)
+            self._ref_timer = None
+        self.cb_ref['values'] = []
+        self._ref_hits = []
+        SuggestPopup.inst().hide(self.cb_ref)
+        self.ref_info.set('Journal: ' + location.timestamp)
+        self.lbl_ref['foreground'] = ''
 
     # ---- 距离参考点联想 (Inara式): 打字即在下方弹候选 ----
     def _on_ref_key(self, event):
@@ -1746,6 +1760,8 @@ class App:
         reference = tk.StringVar(value="Sol")
         cb = ttk.Combobox(controls, textvariable=reference, width=24)
         cb.pack(side="left", padx=4)
+        from journal_gui import current_system_button
+        current_system_button(controls, reference).pack(side='left', padx=4)
         attach_system_suggest(cb, reference)
         radius = tk.StringVar(value="30")
         pages = tk.StringVar(value="20")
@@ -1875,11 +1891,12 @@ class App:
         """两系中点工具: 输入 A、B, 找离中点最近的星系。"""
         win = Toplevel(self.root)
         win.title("两系中点 - 离中点最近的星系")
-        win.geometry("780x560")
+        win.geometry("960x560")
         frm = ttk.Frame(win, padding=8)
         frm.pack(fill="x")
-        ttk.Label(frm, text="A星系").grid(row=0, column=0, sticky="e")
         va = tk.StringVar(value="Sol")
+        from journal_gui import system_label
+        system_label(frm, 'A星系', va).grid(row=0, column=0, sticky='e')
         cba = ttk.Combobox(frm, textvariable=va, width=26)
         cba.grid(row=0, column=1, padx=4, pady=2)
         attach_system_suggest(cba, va)

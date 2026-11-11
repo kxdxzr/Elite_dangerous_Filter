@@ -1,6 +1,21 @@
 """English translations keyed by canonical Chinese UI text. Data only."""
 
 CATALOG = {
+    '使用当前星系': 'Use current system',
+    '选择 Journal 日志文件夹': 'Select Journal folder',
+    '无法读取当前星系': 'Cannot read current system',
+    '当前星系不在此工具支持的来源清单中，已保留原选择。': 'The current system is not in this tool\'s supported source list. The previous selection has been retained.',
+    '读取日志最近确认的位置；非实时定位。右键可选择 Journal 文件夹。': 'Read the last confirmed Journal position, not live tracking. Right-click to select the Journal folder.',
+    '日志最近确认位置：{system}\n记录时间：{timestamp}\n文件：{filename}': 'Last confirmed Journal position: {system}\nRecorded at: {timestamp}\nFile: {filename}',
+    '未找到游戏日志文件夹，请选择 Journal 所在文件夹。': 'Game log folder not found. Please select the Journal folder.',
+    '日志文件过多，请选择只含近期 Journal 的文件夹。': 'Too many log files. Please select a folder containing only recent Journals.',
+    '文件夹中没有 Journal 日志，请先进入游戏或选择其他文件夹。': 'No Journal logs in this folder. Enter the game first or select another folder.',
+    '日志行过长，无法安全读取当前位置。': 'A log line is too long to safely read the current position.',
+    '日志中的位置信息无效，请等待游戏写入新的位置记录。': 'Invalid Journal position. Please wait for a new position record from the game.',
+    '近期日志过大且未找到位置，请在游戏中更新位置后重试。': 'Recent logs exceeded the scan budget without a position. Update your position in game and retry.',
+    '最新游戏会话尚无位置记录，请进入游戏后重试。': 'The latest game session has no position record yet. Enter the game and retry.',
+    '已核实部分结果；检索仍在进行，尚非完整结果。': 'Verified partial results; search is still running, not a complete result set.',
+    '查询失败；保留已核实的部分结果，不能据此判断完整命中或确认没有 RES。': 'Search failed; verified partial results are retained, but completeness or absence of RES cannot be confirmed.',
     '路线椭球坐标包围盒已下推': 'Route ellipsoid coordinate bounds applied on the server',
     '路线中点包围球已下推；仍逐项核对原始条件': 'Route midpoint sphere applied; original conditions are still verified',
     '正在检查 EDTools 清单…': 'Checking the EDTools catalogue…',

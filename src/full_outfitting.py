@@ -72,6 +72,30 @@ def excluded_station(row):
             or 'stronghold carrier' in str(row.get('name', '')).casefold())
 
 
+def system_context(row, http, contexts, reference=None):
+    """Query-local exact system evidence, including negative/failed lookups.
+
+    Preserve punctuation in names; a supplied id64 must match too. Never share
+    context between conflicting identities merely because names look similar.
+    """
+    system = row.get('system_name')
+    ident = row.get('system_id64')
+    cache_key = (str(system or '').strip().casefold(), str(ident) if ident else '')
+    if cache_key not in contexts:
+        payload = dict(filters={'name': {'value': system}}, size=10, page=0)
+        if reference:
+            payload['reference_system'] = reference
+        try:
+            response = http('https://spansh.co.uk/api/systems/search', payload)
+            contexts[cache_key] = next((item for item in response.get('results', [])
+                if str(item.get('name', '')).strip().casefold() == cache_key[0]
+                and (not ident or str(item.get('id64') or item.get('id')) == str(ident))), {})
+        except (urllib.error.URLError, TimeoutError, ValueError):
+            contexts[cache_key] = {}
+            raise
+    return contexts[cache_key]
+
+
 def complete_result_metadata(row, criteria, http, contexts=None, notes=None):
     """Fill presentation fields from exact Spansh identities; never merge stock.
 
@@ -85,15 +109,7 @@ def complete_result_metadata(row, criteria, http, contexts=None, notes=None):
         notes.append('结果缺少星系名称，无法补全资料')
         return
     try:
-        if not contexts.get(system):
-            response = http('https://spansh.co.uk/api/systems/search', dict(
-                filters={'name': {'value': system}}, size=10, page=0,
-                reference_system=criteria.reference))
-            contexts[system] = next((item for item in response.get('results', [])
-                                    if str(item.get('name', '')).strip().casefold() == str(system).strip().casefold()
-                                    and (not row.get('system_id64') or
-                                         str(item.get('id64') or item.get('id')) == str(row['system_id64']))), {})
-        context = contexts[system]
+        context = system_context(row, http, contexts, criteria.reference)
         for target, source in (('needs_permit', 'needs_permit'),
                                ('system_controlling_power', 'controlling_power'),
                                ('system_power_state', 'power_state')):
@@ -125,8 +141,8 @@ def complete_result_metadata(row, criteria, http, contexts=None, notes=None):
         notes.append(f"{system} / {row.get('name')} / 结果站点资料补全失败: {exc}")
 
 
-def check_station(row, criteria, catalog):
-    """Return evidence and all failures. Missing data never qualifies a station."""
+def check_station(row, criteria, catalog, *, stock_only=False):
+    """Return evidence and failures; stock_only is an internal preflight, not a hit."""
     problems, missing, no_discount, unknown = [], [], [], []
     result = dict(matched=False, missing=missing, no_discount=no_discount, problems=problems,
                   surcharge=public_surcharge(row),
@@ -136,9 +152,9 @@ def check_station(row, criteria, catalog):
         return result
     lyr = (key(row.get('system_controlling_power')) == key('Li Yong-Rui')
            and str(row.get('system_power_state', '')).casefold() in ('fortified', 'stronghold'))
-    if criteria.require_discount and not criteria.other_discounts and not lyr:
+    if not stock_only and criteria.require_discount and not criteria.other_discounts and not lyr:
         problems.append('未确认 LYR 15%公共折扣')
-    if criteria.require_discount and criteria.other_discounts and not lyr and not any(
+    if not stock_only and criteria.require_discount and criteria.other_discounts and not lyr and not any(
             key(row.get('system_name')) == key(system) and key(row.get('name')) == key(station)
             for system, station, _ in ALL_MODULE_PUBLIC_STATIONS):
         problems.append('未确认全配件公共折扣')
@@ -217,7 +233,7 @@ def check_station(row, criteria, catalog):
         sale_items.append((actual, label))
     # Do not spend time pricing hundreds of items at clearly incomplete shops.
     # Nearly complete/complete stock is still checked item by item.
-    if not problems and not missing:
+    if not stock_only and not problems and not missing:
         for actual, label in sale_items:
             discount = discount_info(row, actual, 'modules')  # No personal-rank bonuses.
             if discount['discounted'] is not True:
@@ -229,7 +245,7 @@ def check_station(row, criteria, catalog):
                   discount_covered=len(percentages), discount_total=sum(not catalogue.is_special(item) for item in requirements),
                   discount_min=min(percentages) if percentages else None,
                   discount_max=max(percentages) if percentages else None)
-    result['matched'] = not (problems or missing or unknown or (criteria.require_discount and no_discount))
+    result['matched'] = not stock_only and not (problems or missing or unknown or (criteria.require_discount and no_discount))
     return result
 
 
@@ -390,28 +406,28 @@ def search(criteria, want=100, max_pages=25, stop=None, progress=None, catalog=N
                                     and (criteria.universal_limpets or not catalogue.is_universal_limpet(item))
                                     and not catalogue.excluded_hangar(item)]))
 
-        def enrich_power(row):
+        def needs_power_context(row):
             name = row.get('system_name')
             named = any(key(name) == key(system) and key(row.get('name')) == key(station)
                         for system, station, _ in ALL_MODULE_PUBLIC_STATIONS)
-            if (excluded_station(row) or named or not name
-                    or row.get('system_controlling_power') and row.get('system_power_state')):
+            return not (excluded_station(row) or named or not name
+                        or row.get('system_controlling_power') and row.get('system_power_state'))
+
+        def enrich_power(row):
+            if not needs_power_context(row):
                 return
-            if name not in contexts:
-                try:
-                    announce(f"正在补查折扣背景… {row.get('name', '')}",
-                             dict(done=0, work_total=None, stage='优惠资料复核'))
-                    response = http('https://spansh.co.uk/api/systems/search',
-                                    dict(filters={'name': {'value': name}}, size=1, page=0))
-                    contexts[name] = next((item for item in response.get('results', [])
-                                          if str(item.get('name', '')).casefold() == name.casefold()), {})
-                except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-                    contexts[name] = {}
-                    notes.append(f'{name}: {exc}')
+            name = row.get('system_name')
+            try:
+                announce(f"正在补查折扣背景… {row.get('name', '')}",
+                         dict(done=0, work_total=None, stage='优惠资料复核'))
+                context = system_context(row, http, contexts)
+            except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+                notes.append(f'{name}: {exc}')
+                return
             for target, source in (('system_controlling_power', 'controlling_power'),
                                    ('system_power_state', 'power_state'), ('needs_permit', 'needs_permit')):
-                if row.get(target) in (None, '') and source in contexts[name]:
-                    row[target] = contexts[name][source]
+                if row.get(target) in (None, '') and source in context:
+                    row[target] = context[source]
 
         remaining = max_pages
         for stage, source_conditions in candidate_sources(criteria):
@@ -461,9 +477,16 @@ def search(criteria, want=100, max_pages=25, stop=None, progress=None, catalog=N
                 if ident in seen:
                     return False
                 seen.add(ident)
-                if criteria.require_discount:
-                    enrich_power(row)
-                evidence = check_station(row, criteria, catalog)
+                if criteria.require_discount and needs_power_context(row):
+                    evidence = check_station(row, criteria, catalog, stock_only=True)
+                    # Definite stock/other-condition failures cannot be rescued
+                    # by Power data. Unresolved identities can still use the
+                    # existing exact-station second-source verification below.
+                    if not evidence['missing'] and not evidence['problems']:
+                        enrich_power(row)
+                        evidence = check_station(row, criteria, catalog)
+                else:
+                    evidence = check_station(row, criteria, catalog)
                 # Resolve nearly complete inventories through independent,
                 # explicitly named same-market records. No station whitelist.
                 if (catalog.get('module_facts') and evidence['unknown'] and not evidence['missing']

@@ -40,7 +40,9 @@ def open_window(app):
             ('max_extra_ly', '最大额外路程 ly'), ('candidates_per_group', '每组候选数'),
             ('max_pages', '每组最多页数'))):
         row, column = index // 3, index % 3 * 2
-        ttk.Label(form, text=title).grid(row=row, column=column, sticky='w', padx=4, pady=4)
+        from journal_gui import system_label
+        heading = system_label(form, title, variables[key]) if key == 'origin' else ttk.Label(form, text=title)
+        heading.grid(row=row, column=column, sticky='w', padx=4, pady=4)
         if key in ('origin', 'destination'):
             box = ttk.Combobox(form, textvariable=variables[key], width=24)
             attach_system_suggest(box, variables[key])

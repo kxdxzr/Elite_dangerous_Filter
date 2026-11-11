@@ -12,6 +12,8 @@ import urllib.request
 import urllib.error
 import time
 import threading
+from copy import deepcopy
+from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import dataclass, replace
 from html.parser import HTMLParser
@@ -500,7 +502,7 @@ def equal(actual, requested):
 def search(criteria, *, page=None, page_loader=fetch_page, details_loader=system_details,
             resolver=eng.resolve_ref, stop=None, progress=None, refresh=False, workers=None,
             controller_loader=None, power_loader=None, ring_loader=None,
-            systems_loader=None, dataset_loader=None, include_cnb_candidates=False):
+            systems_loader=None, dataset_loader=None, include_cnb_candidates=False, on_results=None):
     criteria.validate()  # Invalid inputs cause zero network requests.
     if criteria.search_mode == 'expanded':
         from res_systems import merge_results, annotate_source_controllers
@@ -520,12 +522,17 @@ def search(criteria, *, page=None, page_loader=fetch_page, details_loader=system
         annotate_source_controllers(rows, info, details_loader=details_loader, stop=stop,
                                     refresh=refresh, progress=progress)
         info['timings']['total'] += time.monotonic() - annotation_started
+        if on_results is not None and rows:
+            on_results(deepcopy(rows))
         return info, rows
     if criteria.search_mode == 'res_systems':
         from res_systems import search as search_res_systems
-        return search_res_systems(criteria, resolver=resolver, stop=stop, progress=progress,
-                                  refresh=refresh, ring_loader=ring_loader,
-                                  systems_loader=systems_loader, dataset_loader=dataset_loader)
+        info, rows = search_res_systems(criteria, resolver=resolver, stop=stop, progress=progress,
+                                   refresh=refresh, ring_loader=ring_loader,
+                                   systems_loader=systems_loader, dataset_loader=dataset_loader)
+        if on_results is not None and rows:
+            on_results(deepcopy(rows))
+        return info, rows
     started = time.monotonic()
     reporter = ProgressReporter(progress)
     timings = {}
@@ -639,59 +646,59 @@ def search(criteria, *, page=None, page_loader=fetch_page, details_loader=system
             if key in cache and ('stations' not in cache[key] or details_loader is system_details and cache[key].get('station_schema') != 2):
                 del cache[key]
 
-    # Bounded in-flight requests. Workers never access Tk; failures are per-query
-    # only, never written into the persistent success cache.
-    stage = time.monotonic()
-    if worker_count > 1 and (needs_source or needs_target):
-        names = dict.fromkeys(row[side] for row in candidates
-                             for side, needed in (('source', needs_source), ('target', needs_target))
-                             if needed and row[side].casefold() not in cache)
-        iterator = iter(names)
-        def load(name):
-            return system_details(name, refresh=refresh) if details_loader is system_details else details_loader(name)
-        reporter.emit(f'查询派系详情：{len(names)} 个星系，最多 {worker_count} 并发…', True)
-        pool = ThreadPoolExecutor(max_workers=worker_count)
+    timings['details'] = 0.0
+    info['detail_requests'] = 0
+
+    def load(name):
+        return system_details(name, refresh=refresh) if details_loader is system_details else details_loader(name)
+
+    def prefetch(names, pool):
+        """Only a small current batch, deduplicated against this query's cache."""
+        unique = {name.casefold(): name for name in names if name.casefold() not in cache}
+        if not unique or stop is not None and stop.is_set():
+            return
+        started_details = time.monotonic()
         pending = {}
-        completed = 0
+        iterator = iter(unique.items())
         try:
             def submit_next():
-                name = next(iterator, None)
-                if name is not None:
-                    pending[pool.submit(load, name)] = name
-            for _ in range(worker_count):
-                if stop is None or not stop.is_set():
-                    submit_next()
-            while pending:
                 if stop is not None and stop.is_set():
-                    info['complete'] = False
-                    break
+                    return
+                item = next(iterator, None)
+                if item is not None:
+                    key, name = item
+                    pending[pool.submit(load, name)] = key
+                    info['detail_requests'] += 1
+            for _ in range(worker_count):
+                submit_next()
+            while pending and (stop is None or not stop.is_set()):
                 ready, _ = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
                 for future in ready:
-                    name = pending.pop(future)
+                    key = pending.pop(future)
                     try:
-                        cache[name.casefold()] = future.result()
+                        cache[key] = future.result()
                     except Exception as exc:
-                        cache[name.casefold()] = exc
-                    completed += 1
-                    reporter.emit(f'查询派系详情：{completed}/{len(names)} 个星系')
-                    if stop is None or not stop.is_set():
-                        submit_next()
+                        cache[key] = exc
+                    reporter.emit(f"查询派系详情：{info['detail_requests']} 个星系")
+                    submit_next()
         finally:
             for future in pending:
                 future.cancel()
-            pool.shutdown(wait=True, cancel_futures=True)
-        info['detail_requests'] = completed
-    timings['details'] = time.monotonic() - stage
+            timings['details'] += time.monotonic() - started_details
 
     def details(name):
         if stop is not None and stop.is_set():
             raise _Cancelled()
         key = name.casefold()
         if key not in cache:
+            started_details = time.monotonic()
+            info['detail_requests'] += 1
             try:
-                cache[key] = system_details(name, refresh=refresh) if details_loader is system_details else details_loader(name)
+                cache[key] = load(name)
             except Exception as exc:
                 cache[key] = exc
+            finally:
+                timings['details'] += time.monotonic() - started_details
         if isinstance(cache[key], Exception):
             raise cache[key]
         return cache[key]
@@ -700,92 +707,137 @@ def search(criteria, *, page=None, page_loader=fetch_page, details_loader=system
         diagnostics['other_filters_rejected'] += 1
         diagnostics[reason] = diagnostics.get(reason, 0) + 1
 
-    stage = time.monotonic()
-    reporter.emit(f'本地复核：{len(candidates)} 条候选…', True)
-    for original in candidates:
-        if stop is not None and stop.is_set():
-            info['complete'] = False
-            info['notes'].append('Stopped; CNB fallback suppressed because RES absence is unconfirmed.')
-            break
-        info['scanned'] += 1
-        reporter.emit(f"Checking {info['scanned']}/{len(candidates)}: {original['source']} → {original['target']}")
-        if stop is not None and stop.is_set():
-            info['complete'] = False
-            break
-        row = dict(original)
-        if criteria.radius > 0 and row['distance'] > criteria.radius:
-            continue
-        try:
-            if needs_source:
-                source = details(row['source'])
-                row.update(source_controller=source.get('controlling_minor_faction', ''),
-                           source_power=source.get('controlling_power', ''), source_updated=source.get('updated_at', ''))
-                if criteria.source_faction:
-                    presences = source.get('minor_faction_presences')
-                    if not isinstance(presences, list):
-                        raise ValueError('Source faction presence data missing.')
-                    if not any(equal(f.get('name'), criteria.source_faction) for f in presences if isinstance(f, dict)):
-                        rejected('source_presence_rejected')
-                        continue
-                if criteria.source_controller:
-                    if not row['source_controller']:
-                        raise ValueError('Source controlling faction unknown.')
-                    if not equal(row['source_controller'], criteria.source_controller):
-                        rejected('source_controller_rejected')
-                        continue
-                if criteria.min_factions or criteria.min_federation or criteria.min_empire:
-                    eligible = eligible_factions(source)
-                    row.update(factions=len(eligible),
-                               federation=sum(equal(f['allegiance'], 'Federation') for f in eligible),
-                               empire=sum(equal(f['allegiance'], 'Empire') for f in eligible), count_source='Spansh estimate')
-                if criteria.power and criteria.power_scope in ('source', 'both'):
-                    if 'controlling_power' not in source:
-                        raise ValueError('Source controlling Power data missing.')
-                    if not equal(row['source_power'], requested_power):
-                        rejected('source_power_rejected')
-                        continue
-                if station_filter:
-                    station = pve_access.station_match(source, criteria.source_pad, criteria.source_station_max_ls)
-                    if station is None:
-                        rejected('source_station_rejected')
-                        continue
-                    row.update(station)
-            if needs_target:
-                target = details(row['target'])
-                row.update(target_controller=target.get('controlling_minor_faction', ''),
-                           target_power=target.get('controlling_power', ''), target_updated=target.get('updated_at', ''))
-                if criteria.target_controller:
-                    if not row['target_controller']:
-                        raise ValueError('Target controlling faction unknown.')
-                    if not equal(row['target_controller'], criteria.target_controller):
-                        rejected('target_controller_rejected')
-                        continue
-                if criteria.power and criteria.power_scope in ('target', 'both'):
-                    if 'controlling_power' not in target:
-                        raise ValueError('Target controlling Power data missing.')
-                    if not equal(row['target_power'], requested_power):
-                        rejected('target_power_rejected')
-                        continue
-        except _Cancelled:
-            info['complete'] = False
-            break
-        except Exception as exc:
-            info['complete'] = False
-            info['errors'].append(f"{row['source']} → {row['target']}: {exc}")
-            continue
+    def source_matches(row):
+        if needs_source:
+            source = details(row['source'])
+            row.update(source_controller=source.get('controlling_minor_faction', ''),
+                       source_power=source.get('controlling_power', ''), source_updated=source.get('updated_at', ''))
+            if criteria.source_faction:
+                presences = source.get('minor_faction_presences')
+                if not isinstance(presences, list):
+                    raise ValueError('Source faction presence data missing.')
+                if not any(equal(f.get('name'), criteria.source_faction) for f in presences if isinstance(f, dict)):
+                    rejected('source_presence_rejected')
+                    return False
+            if criteria.source_controller:
+                if not row['source_controller']:
+                    raise ValueError('Source controlling faction unknown.')
+                if not equal(row['source_controller'], criteria.source_controller):
+                    rejected('source_controller_rejected')
+                    return False
+            if criteria.min_factions or criteria.min_federation or criteria.min_empire:
+                eligible = eligible_factions(source)
+                row.update(factions=len(eligible),
+                           federation=sum(equal(f['allegiance'], 'Federation') for f in eligible),
+                           empire=sum(equal(f['allegiance'], 'Empire') for f in eligible), count_source='Spansh estimate')
+            if criteria.power and criteria.power_scope in ('source', 'both'):
+                if 'controlling_power' not in source:
+                    raise ValueError('Source controlling Power data missing.')
+                if not equal(row['source_power'], requested_power):
+                    rejected('source_power_rejected')
+                    return False
+            if station_filter:
+                station = pve_access.station_match(source, criteria.source_pad, criteria.source_station_max_ls)
+                if station is None:
+                    rejected('source_station_rejected')
+                    return False
+                row.update(station)
         if (row['factions'] < criteria.min_factions or row['federation'] < criteria.min_federation
                 or row['empire'] < criteria.min_empire):
             rejected('faction_minima_rejected')
-            continue
-        kind = site_kind(row)
-        row['site'] = ('RES Low' if 'low' in row['res_types'] else 'RES') if kind == 'res' else {
-            'rings': 'RES（星环推定）', 'cnb': 'CNB', 'unknown': '情况未知'}[kind]
-        row['site_evidence'] = kind
-        (res if kind in ('res', 'rings') else cnb if kind == 'cnb' else unknown).append(row)
+            return False
+        return True
+
+    def source_survivors():
+        # Unlimited radius still visits every candidate; the bound is on work
+        # in flight, never on catalogue coverage. Serial callers retain lazy I/O.
+        batch_size = worker_count * 2 if worker_count > 1 else 1
+        diagnostics['detail_batch_size'] = batch_size
+        with ThreadPoolExecutor(max_workers=worker_count) as pool:
+            for start in range(0, len(candidates), batch_size):
+                if stop is not None and stop.is_set():
+                    return
+                batch = candidates[start:start + batch_size]
+                if needs_source and worker_count > 1:
+                    prefetch((row['source'] for row in batch), pool)
+                survivors = []
+                for original in batch:
+                    if stop is not None and stop.is_set():
+                        return
+                    info['scanned'] += 1
+                    reporter.emit(f"Checking {info['scanned']}/{len(candidates)}: {original['source']} → {original['target']}")
+                    if stop is not None and stop.is_set():
+                        return
+                    row = dict(original)
+                    try:
+                        if source_matches(row):
+                            survivors.append(row)
+                    except _Cancelled:
+                        info['complete'] = False
+                        return
+                    except Exception as exc:
+                        info['complete'] = False
+                        info['errors'].append(f"{row['source']} → {row['target']}: {exc}")
+                if needs_target and worker_count > 1:
+                    prefetch((row['target'] for row in survivors), pool)
+                yield from survivors
+
+    emitted = set()
+    def emit(rows):
+        if on_results is None:
+            return
+        batch = []
+        for row in rows:
+            key = (row['source'].casefold(), row['target'].casefold())
+            if key not in emitted:
+                emitted.add(key)
+                batch.append(deepcopy(row))
+        if batch:
+            on_results(batch)
+
+    stage = time.monotonic()
+    reporter.emit(f'本地复核：{len(candidates)} 条候选…', True)
+    with closing(source_survivors()) as survivors:
+        for row in survivors:
+            if stop is not None and stop.is_set():
+                info['complete'] = False
+                info['notes'].append('Stopped; CNB fallback suppressed because RES absence is unconfirmed.')
+                break
+            try:
+                if needs_target:
+                    target = details(row['target'])
+                    row.update(target_controller=target.get('controlling_minor_faction', ''),
+                               target_power=target.get('controlling_power', ''), target_updated=target.get('updated_at', ''))
+                    if criteria.target_controller:
+                        if not row['target_controller']:
+                            raise ValueError('Target controlling faction unknown.')
+                        if not equal(row['target_controller'], criteria.target_controller):
+                            rejected('target_controller_rejected')
+                            continue
+                    if criteria.power and criteria.power_scope in ('target', 'both'):
+                        if 'controlling_power' not in target:
+                            raise ValueError('Target controlling Power data missing.')
+                        if not equal(row['target_power'], requested_power):
+                            rejected('target_power_rejected')
+                            continue
+            except _Cancelled:
+                info['complete'] = False
+                break
+            except Exception as exc:
+                info['complete'] = False
+                info['errors'].append(f"{row['source']} → {row['target']}: {exc}")
+                continue
+            kind = site_kind(row)
+            row['site'] = ('RES Low' if 'low' in row['res_types'] else 'RES') if kind == 'res' else {
+                'rings': 'RES（星环推定）', 'cnb': 'CNB', 'unknown': '情况未知'}[kind]
+            row['site_evidence'] = kind
+            (res if kind in ('res', 'rings') else cnb if kind == 'cnb' else unknown).append(row)
+            if kind in ('res', 'rings') and criteria.target_ring_max_ls is None:
+                emit([row])
     if stop is not None and stop.is_set():
         info['complete'] = False
         info['notes'].append('Stopped; partial results only, no CNB fallback.')
-    timings['scan'] = time.monotonic() - stage
+    timings['scan'] = max(0.0, time.monotonic() - stage - timings['details'])
     stage = time.monotonic()
     # Unknown EDTools sites are checked even without an arrival-distance limit.
     # Do not infer absence from failed requests, empty system coverage or bad data.
@@ -868,5 +920,6 @@ def search(criteria, *, page=None, page_loader=fetch_page, details_loader=system
     result.sort(key=lambda r: (2 if r['site_evidence'] == 'unknown' else 0 if criteria.prefer_low and r['site'] == 'RES Low' else 1,
                                r['distance'], r['source'].casefold(), r['target'].casefold()))
     info['hits'] = len(result)
+    emit(result)
     reporter.emit(f"检索完成：{len(result)} 条结果；耗时 {timings['total']:.2f} 秒", True)
     return info, result

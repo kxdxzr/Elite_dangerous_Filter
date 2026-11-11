@@ -139,7 +139,9 @@ def open_window(app):
         section.grid(row=0 if section_index < 2 else 1, column=section_index if section_index < 2 else 0,
                      columnspan=1 if section_index < 2 else 2, sticky='ew', padx=3, pady=3)
         for index, (key, text) in enumerate(specs):
-            ttk.Label(section, text=text).grid(row=0, column=index, sticky='w', padx=3)
+            from journal_gui import system_label
+            heading = system_label(section, text, variables[key]) if key == 'reference' else ttk.Label(section, text=text)
+            heading.grid(row=0, column=index, sticky='w', padx=3)
             if key == 'value_field':
                 entry = ttk.Combobox(section, textvariable=variables[key], state='readonly',
                                      values=['estimated_mapping_value', 'estimated_scan_value', 'landmark_value'], width=25)

@@ -25,6 +25,8 @@ def open_window(app, data_age):
     cb_ref = ttk.Combobox(controls, textvariable=reference, width=36,
                           state="readonly", values=sources.SOURCE_SYSTEMS)
     cb_ref.pack(side="left", padx=4, fill='x', expand=True)
+    from journal_gui import current_system_button
+    current_system_button(controls, reference, allowed_systems=sources.SOURCE_SYSTEMS).pack(side='left', padx=4)
     distances = ttk.Frame(win, padding=(8, 0))
     distances.pack(fill='x')
     for label, variable in (("最小距离 ly", minimum), ("最大距离 ly", maximum),

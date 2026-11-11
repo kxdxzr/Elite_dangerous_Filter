@@ -84,8 +84,10 @@ class LocalizedGuiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         import field_options as fo
+        import edtools_snapshot
         cls.patches = [patch.object(fo, 'prefetch_common', lambda *a: None),
                        patch.object(fo, 'get_options', lambda *a: []),
+                       patch.object(edtools_snapshot, 'check', return_value=dict(status='recent')),
                        patch.object(gui.App, 'restore_session', lambda *a: None)]
         for item in cls.patches:
             item.start()

@@ -181,9 +181,18 @@ class SearchTests(unittest.TestCase):
         fo._mem.clear()
         fo._refreshed.update(("stations/ships", "stations/modules"))
         try:
-            with patch.object(fo, "_http_json", side_effect=OSError("offline")):
+            # This checks the bundled offline baseline, not optional records
+            # learned by other tests or a user's existing additive cache.
+            with patch.object(fo, "_http_json", side_effect=OSError("offline")), \
+                    patch.object(fo, '_load_disk', return_value={}), patch.object(fo, '_save_disk'):
                 self.assertEqual(len(fo.get_options("stations", "modules")), 153)
                 self.assertEqual(len(fo.get_options("stations", "ships")), 48)
+            fo._mem.pop('stations/ships', None)
+            with patch.object(fo, '_load_disk', return_value={'stations/ships': ['Cached Test Ship']}), \
+                    patch.object(fo, '_save_disk'):
+                ships = fo.get_options('stations', 'ships')
+                self.assertEqual(len(ships), 49)
+                self.assertIn('Cached Test Ship', ships)
             merged = fo._merge_lists(["A", "b"], ["B", "c"], ["a"])
             self.assertEqual(merged, ["A", "b", "c"])
         finally:

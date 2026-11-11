@@ -3,7 +3,7 @@ import re
 
 PROJECT_AUTHOR = 'kxdxzr'
 PROJECT_NAME = 'Elite_dangerous_Filter'
-PROJECT_VERSION = '0.1.5-beta'
+PROJECT_VERSION = '0.1.5-beta.2'
 PROJECT_URL = 'https://github.com/kxdxzr/Elite_dangerous_Filter'
 
 

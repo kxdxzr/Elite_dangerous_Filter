@@ -34,7 +34,9 @@ def open_window(app):
                                          ('want', '最多结果'), ('population', '人口下限'),
                                          ('freshness', '星系记录时效'), ('max_pages', '最多页数'))):
         row, column = 1 + index // 3, (index % 3) * 2
-        ttk.Label(form, text=title).grid(row=row, column=column, sticky='w', padx=4, pady=4)
+        from journal_gui import system_label
+        heading = system_label(form, title, variables[key]) if key == 'reference' else ttk.Label(form, text=title)
+        heading.grid(row=row, column=column, sticky='w', padx=4, pady=4)
         if key in ('population', 'freshness'):
             values = tool.POPULATION_OPTIONS if key == 'population' else tool.FRESHNESS_OPTIONS
             box = ttk.Combobox(form, textvariable=variables[key], values=list(values), state='readonly', width=20)
